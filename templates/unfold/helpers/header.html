@@ -1,0 +1,104 @@
+{% load i18n unfold %}
+{% comment %}
+Navbar propia. Sustituye a unfold/helpers/header.html porque la de serie solo
+trae el titulo: falta el reloj del servicio y un menu de usuario con cierre
+de sesion.
+
+Los includes de otras plantillas de Unfold siguen resolviendo al paquete.
+{% endcomment %}
+
+<header class="zs-nav">
+    <div class="zs-nav-left">
+        {% if is_nav_sidebar_enabled and not is_popup %}
+            {# Uno por tamano de pantalla: en escritorio pliega la barra; por  #}
+            {# debajo de xl (1280px, el corte de Unfold) la abre como cajon.  #}
+            <button type="button" class="zs-nav-toggle zs-only-desktop"
+                    title="Plegar el menú" aria-label="Plegar el menú"
+                    x-on:click="sidebarDesktopOpen = !sidebarDesktopOpen; localStorage.setItem('sidebarDesktopOpen', sidebarDesktopOpen ? '1' : '0');">
+                <span class="material-symbols-outlined">dock_to_right</span>
+            </button>
+            <button type="button" class="zs-nav-toggle zs-only-mobile"
+                    title="Abrir el menú" aria-label="Abrir el menú"
+                    x-on:click="sidebarMobileOpen = !sidebarMobileOpen">
+                <span class="material-symbols-outlined">menu</span>
+            </button>
+            <span class="zs-nav-rule"></span>
+        {% endif %}
+
+        {% include "unfold/helpers/header_back_button.html" %}
+
+        <h1 class="zs-nav-title">
+            {% header_title %}
+            {% if cl and cl.full_result_count != cl.result_count and cl.paginator|class_name != "InfinitePaginator" %}
+                <span class="zs-nav-count">
+                    {% blocktranslate count counter=cl.result_count %}{{ counter }} resultado{% plural %}{{ counter }} resultados{% endblocktranslate %}
+                </span>
+            {% elif cl %}
+                <span class="zs-nav-count">{{ cl.result_count }}</span>
+            {% endif %}
+        </h1>
+    </div>
+
+    <div class="zs-nav-right">
+        <div class="zs-nav-clock" x-data="{
+                 hora: '',
+                 fecha: '',
+                 tick() {
+                     const ahora = new Date();
+                     this.hora = ahora.toLocaleTimeString('es-PE', {hour: '2-digit', minute: '2-digit', hour12: false});
+                     this.fecha = ahora.toLocaleDateString('es-PE', {weekday: 'short', day: 'numeric', month: 'short'});
+                 }
+             }" x-init="tick(); setInterval(() => tick(), 30000)">
+            <b x-text="hora">--:--</b>
+            <span x-text="fecha"></span>
+        </div>
+
+        {# La accion que mas se repite en el dia, a un clic desde cualquier pagina. #}
+        {% if perms.reservations.add_reservation %}
+            <a href="{% url 'admin:reservations_reservation_add' %}" class="zs-btn zs-btn--solid zs-nav-new"
+               title="Nueva reserva" aria-label="Nueva reserva">
+                <span class="material-symbols-outlined">add</span>
+                <span class="zs-nav-new-text">Nueva reserva</span>
+            </a>
+        {% endif %}
+
+        {% action_list %}
+
+        {% if nav_global_side %}{{ nav_global_side }}{% endif %}
+
+        {% if user.is_authenticated %}
+            <div class="zs-user" x-data="{ abierto: false }" x-on:click.outside="abierto = false">
+                <button type="button" class="zs-user-trigger" x-on:click="abierto = !abierto"
+                        title="{{ user.get_full_name|default:user.get_username }}"
+                        aria-label="Menú de usuario">
+                    <span class="zs-avatar">{{ user.get_username|slice:":2"|upper }}</span>
+                </button>
+
+                <div class="zs-user-menu" x-show="abierto" x-cloak x-transition.opacity>
+                    <div class="zs-user-head">
+                        <b>{{ user.get_full_name|default:user.get_username }}</b>
+                        <span>{{ user.email|default:"sin correo" }}</span>
+                    </div>
+
+                    <a href="{% url 'admin:password_change' %}" class="zs-user-item">
+                        <span class="material-symbols-outlined">key</span>
+                        Cambiar contraseña
+                    </a>
+
+                    <a href="{% url 'admin:index' %}" class="zs-user-item">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        Panel de inicio
+                    </a>
+
+                    <form method="post" action="{% url 'admin:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="zs-user-item">
+                            <span class="material-symbols-outlined">logout</span>
+                            Cerrar sesión
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</header>

@@ -1,0 +1,71 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Confirmacion de cancelacion. Existe para poder anotar el motivo: sin esto la
+accion de la lista guardaba siempre el mismo texto y despues no habia forma
+de distinguir "el cliente llamo" de "cerramos por averia".
+{% endcomment %}
+
+{% block title %}Cancelar {{ reservation.code }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="zs-dash">
+    <div class="zs-hero">
+        <div>
+            <h1>Cancelar {{ reservation.code }}</h1>
+            <p>
+                <b>{{ reservation.guest.name }}</b> ·
+                {{ reservation.party_size }} {{ reservation.party_size|pluralize:"persona,personas" }} ·
+                {{ reservation.service_date|date:"l j \d\e F"|capfirst }}
+                a las {{ local_start|time:"H:i" }} ·
+                mesa {{ reservation.table_codes }}.
+            </p>
+        </div>
+    </div>
+
+    <div class="zs-card">
+        <div class="zs-card-head">
+            <h3><span class="material-symbols-outlined">cancel</span> ¿Por qué se cancela?</h3>
+        </div>
+        <div class="zs-card-body">
+            <form method="post" class="zs-form">
+                {% csrf_token %}
+
+                <div class="zs-reasons">
+                    {% for motivo in reasons %}
+                        <label class="zs-reason">
+                            <input type="radio" name="preset" value="{{ motivo }}"
+                                   {% if forloop.first %}checked{% endif %}>
+                            <span>{{ motivo }}</span>
+                        </label>
+                    {% endfor %}
+                    <label class="zs-reason">
+                        <input type="radio" name="preset" value="">
+                        <span>Otro motivo</span>
+                    </label>
+                </div>
+
+                <label class="zs-field">
+                    <span>Detalle (opcional)</span>
+                    <input type="text" name="reason" maxlength="120"
+                           placeholder="Ej.: llamó a las 18:40, quiere mover al sábado">
+                </label>
+
+                <p class="zs-note">
+                    <span class="material-symbols-outlined">info</span>
+                    La mesa {{ reservation.table_codes }} queda libre de inmediato y la
+                    cancelación se anota en el historial de la reserva y en la ficha
+                    del cliente.
+                </p>
+
+                <div class="zs-form-actions">
+                    <a href="{{ back_url }}" class="zs-btn zs-btn--lg">No cancelar</a>
+                    <button type="submit" class="zs-btn zs-btn--lg zs-btn--danger">
+                        <span class="material-symbols-outlined">cancel</span>
+                        Cancelar la reserva
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

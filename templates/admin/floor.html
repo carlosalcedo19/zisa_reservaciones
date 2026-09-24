@@ -1,0 +1,633 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Plano de sala y ocupacion por horas. Los datos llegan de wapp.floor.floor_view.
+
+Las mesas y la linea de tiempo se pintan en el servidor (se ven aunque falle
+el JS); Alpine solo abre el panel de detalle, sigue el raton por la linea de
+tiempo y maneja el modo de edicion, en el que las mesas se arrastran y se
+guardan todas juntas con un POST.
+{% endcomment %}
+
+{% block title %}Plano de sala | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="zs-dash">
+
+{% if not venue %}
+    <div class="zs-hero">
+        <div>
+            <h1>Aún no hay sala que dibujar</h1>
+            <p>Crea el restaurante, sus zonas y sus mesas y aquí aparecerá el plano.</p>
+        </div>
+        <a href="{% url 'admin:venues_venue_add' %}" class="zs-btn zs-btn--solid zs-btn--lg">
+            <span class="material-symbols-outlined">add</span> Crear restaurante
+        </a>
+    </div>
+{% else %}
+
+{{ tables_json|json_script:"zs-floor-data" }}
+{{ tl_window|json_script:"zs-tl-window" }}
+
+<div x-data="zsFloor()" class="zs-floor" data-positions-url="{{ positions_url }}" data-csrf="{{ csrf_token }}" data-live="{{ is_now|yesno:'1,0' }}">
+
+    {# Cabecera: cuando y como esta la sala ------------------------------- #}
+    <section class="zs-floor-top">
+        <div class="zs-floor-heading">
+            <p class="zs-floor-when{% if not is_now %} is-other{% endif %}">
+                {% if is_now %}
+                    <span class="zs-live" aria-hidden="true"></span> En vivo · se actualiza cada minuto
+                {% else %}
+                    <span class="material-symbols-outlined">history_toggle_off</span> No es la hora actual
+                {% endif %}
+            </p>
+            {# En vivo, la hora y la fecha ya estan en el reloj de la cabecera. #}
+            <h1>
+                {% if is_now %}
+                    La sala ahora
+                {% else %}
+                    {{ local_at|time:"H:i" }}
+                    <span>{{ local_at|date:"l j \d\e F"|capfirst }}</span>
+                {% endif %}
+            </h1>
+        </div>
+
+        <div class="zs-floor-stats">
+            <div class="zs-stat">
+                <b>{{ stats.free }}<small>/{{ stats.total }}</small></b>
+                <span>mesas libres</span>
+            </div>
+            <div class="zs-stat">
+                <b>{{ stats.people }}</b>
+                <span>personas en sala</span>
+            </div>
+            <div class="zs-stat">
+                <b>{{ stats.arriving }}</b>
+                <span>llegan en 1 h</span>
+            </div>
+            <div class="zs-stat{% if stats.late %} is-bad{% endif %}">
+                <b>{{ stats.late }}</b>
+                <span>sin llegar</span>
+            </div>
+        </div>
+    </section>
+
+    {# Barra de tiempo ------------------------------------------------------ #}
+    <div class="zs-floor-bar">
+        <form method="get" class="zs-floor-time">
+            {% if venues|length > 1 %}
+                <select name="local" class="zs-input" onchange="this.form.submit()" aria-label="Restaurante">
+                    {% for v in venues %}
+                        <option value="{{ v.pk }}" {% if v.pk == venue.pk %}selected{% endif %}>{{ v.name }}</option>
+                    {% endfor %}
+                </select>
+            {% else %}
+                <input type="hidden" name="local" value="{{ venue.pk }}">
+            {% endif %}
+
+            <div class="zs-seg">
+                <a href="{{ prev_url }}" title="30 minutos antes" aria-label="30 minutos antes">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </a>
+                {# El campo de fecha va invisible encima del texto: se ve en espanol #}
+                {# y al tocarlo abre el calendario del navegador.                    #}
+                <label class="zs-seg-field">
+                    <span class="material-symbols-outlined">calendar_today</span>
+                    <span>{{ date_label }}</span>
+                    <input type="date" name="fecha" value="{{ local_at|date:'Y-m-d' }}" aria-label="Fecha"
+                           onclick="try { this.showPicker(); } catch (e) {}" onchange="this.form.submit()">
+                </label>
+                <label class="zs-seg-field">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <select name="hora" aria-label="Hora" onchange="this.form.submit()">
+                        {% for h in time_options %}
+                            <option value="{{ h }}"{% if h == time_selected %} selected{% endif %}>{{ h }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <a href="{{ next_url }}" title="30 minutos después" aria-label="30 minutos después">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </a>
+            </div>
+            <noscript><button type="submit" class="zs-btn zs-btn--lg">Ver</button></noscript>
+            {% if not is_now %}
+                <a href="{{ now_url }}" class="zs-btn zs-btn--solid zs-btn--lg">
+                    <span class="material-symbols-outlined">my_location</span> Volver a ahora
+                </a>
+            {% endif %}
+        </form>
+
+        <div class="zs-floor-legend" role="list" aria-label="Leyenda">
+            {% for item in legend %}
+                <span class="zs-floor-key" role="listitem" data-empty="{{ item.count|yesno:'false,true' }}">
+                    <i class="zs-swatch" data-state="{{ item.key }}"></i>
+                    {{ item.label }} <b>{{ item.count }}</b>
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if unplaced %}
+        <div class="zs-alert zs-alert--info">
+            <span class="material-symbols-outlined">info</span>
+            <span>{{ unplaced }} mesas no tienen posición y se ven amontonadas en la esquina.
+                  {% if can_edit %}Pulsa «Editar plano» y arrástralas a su sitio.{% endif %}</span>
+        </div>
+    {% endif %}
+
+    {# Barra del modo edicion --------------------------------------------- #}
+    <div class="zs-floor-editing" x-show="edit" x-cloak>
+        <span class="material-symbols-outlined">open_with</span>
+        <span>Arrastra las mesas a su sitio. Con una seleccionada, las flechas la mueven de a poco (Shift para ir más rápido).</span>
+        <span class="zs-floor-editing-actions">
+            <button type="button" class="zs-btn zs-btn--lg" x-on:click="cancelEdit()">Cancelar</button>
+            <button type="button" class="zs-btn zs-btn--solid zs-btn--lg" x-on:click="save()" x-bind:disabled="saving">
+                <span class="material-symbols-outlined">save</span>
+                <span x-text="saving ? 'Guardando…' : 'Guardar plano'">Guardar plano</span>
+            </button>
+        </span>
+    </div>
+
+    <div class="zs-floor-grid">
+
+        {# Plano --------------------------------------------------------------- #}
+        <div class="zs-card zs-plan-card">
+            <div class="zs-card-head">
+                <h3><span class="material-symbols-outlined">table_restaurant</span> {{ venue.name }}</h3>
+                {% if can_edit %}
+                    <button type="button" class="zs-btn" x-show="!edit" x-on:click="startEdit()">
+                        <span class="material-symbols-outlined">open_with</span> Editar plano
+                    </button>
+                {% endif %}
+            </div>
+            <div class="zs-plan-scroll">
+                <div class="zs-plan" x-ref="plan" x-bind:class="{ 'is-editing': edit }"
+                     style="--plan-h:{{ plan_height }}px">
+                  <div class="zs-plan-inner" x-ref="inner">
+                    {% for area in areas %}
+                        <div class="zs-plan-area" data-idx="{{ area.idx }}" x-show="!edit" style="{{ area.style }}">
+                            <span class="zs-plan-area-tag">
+                                <span class="material-symbols-outlined">{{ area.icon }}</span>{{ area.name }}
+                            </span>
+                        </div>
+                    {% endfor %}
+
+                    {% for t in tables %}
+                        <button type="button" class="zs-ft" data-id="{{ t.pk }}"
+                                data-state="{{ t.state }}" data-shape="{{ t.shape }}"
+                                data-rx="{{ t.rx }}" data-ry="{{ t.ry }}" style="{{ t.style }}"
+                                aria-label="Mesa {{ t.code }}, {{ t.area.name }}: {{ t.hint }}"
+                                x-bind:class="{ 'is-selected': selId === '{{ t.pk }}' }"
+                                x-on:click="pick('{{ t.pk }}')"
+                                x-on:pointerdown="dragStart($event)"
+                                x-on:keydown="nudge($event, '{{ t.pk }}')">
+                            {% for c in t.chairs %}
+                                <i class="zs-chair{% if c.taken %} is-taken{% endif %}" style="{{ c.style }}" aria-hidden="true"></i>
+                            {% endfor %}
+                            <span class="zs-ft-top">
+                                <b>{{ t.code }}</b>
+                                <small>{{ t.hint }}</small>
+                                {% if t.state == "seated" %}<i class="zs-ft-progress" aria-hidden="true"></i>{% endif %}
+                            </span>
+                        </button>
+                    {% endfor %}
+                  </div>
+                </div>
+            </div>
+        </div>
+
+        {# Panel de detalle ------------------------------------------------- #}
+        <aside class="zs-card zs-floor-panel" aria-live="polite">
+            {# Sin mesa elegida: lo que el anfitrion necesita de un vistazo. #}
+            <template x-if="!sel">
+                <div class="zs-overview">
+                    <div class="zs-panel-sec">
+                        <p class="zs-panel-label">Por llegar</p>
+                        {% for a in arrivals %}
+                            <button type="button" class="zs-ov-row{% if a.late %} is-late{% endif %}" x-on:click="pick('{{ a.table_id }}')">
+                                <span class="zs-ov-time">{{ a.time }}</span>
+                                <span class="zs-ov-who"><b>{{ a.guest }}</b><small>{{ a.party }} pers. · {{ a.tables }}</small></span>
+                                <span class="zs-ov-when">{{ a.when }}</span>
+                            </button>
+                        {% empty %}
+                            <p class="zs-panel-text">Nadie más por llegar en este servicio.</p>
+                        {% endfor %}
+                        {% if arrivals_more %}<p class="zs-panel-text">y {{ arrivals_more }} más…</p>{% endif %}
+                    </div>
+                    {% if freeing %}
+                        <div class="zs-panel-sec">
+                            <p class="zs-panel-label">Se liberan pronto</p>
+                            {% for f in freeing %}
+                                <button type="button" class="zs-ov-row" x-on:click="pick('{{ f.table_id }}')">
+                                    <span class="zs-ov-time">{{ f.until }}</span>
+                                    <span class="zs-ov-who"><b>{{ f.tables }}</b><small>{{ f.guest }}</small></span>
+                                    <span class="zs-ov-when">en {{ f.in }}</span>
+                                </button>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="zs-ov-hint">
+                        <span class="material-symbols-outlined">touch_app</span>
+                        Toca una mesa del plano para ver su detalle.
+                    </p>
+                </div>
+            </template>
+
+            <template x-if="sel">
+                <div>
+                    <div class="zs-panel-head" x-bind:data-state="sel.state">
+                        <div>
+                            <span class="zs-panel-code" x-text="sel.code"></span>
+                            <span class="zs-panel-sub" x-text="sel.area + ' · ' + sel.seats + ' personas'"></span>
+                        </div>
+                        <button type="button" class="zs-btn zs-btn--icon" x-on:click="pick(null)" aria-label="Cerrar">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+
+                    <div class="zs-panel-sec">
+                        <div><span class="zs-chip" x-bind:data-tone="sel.tone" x-text="sel.state_label"></span></div>
+                    </div>
+
+                    <template x-if="sel.now && sel.now.kind === 'reservation'">
+                        <div class="zs-panel-sec">
+                            <p class="zs-panel-label">Ahora</p>
+                            <a class="zs-panel-who" x-bind:href="sel.now.url">
+                                <b x-text="sel.now.guest"></b>
+                                <span x-text="sel.now.party + ' personas · ' + sel.now.range"></span>
+                            </a>
+                            <template x-if="sel.state === 'seated'">
+                                <div class="zs-panel-meter">
+                                    <div class="zs-bar"><i x-bind:style="'width:' + sel.now.progress + '%'"></i></div>
+                                    <span x-text="'Se libera en ' + sel.now.remaining + ' (' + sel.now.until + ')'"></span>
+                                </div>
+                            </template>
+                            <ul class="zs-panel-facts">
+                                <li x-show="sel.state === 'late'" class="is-bad">
+                                    <span class="material-symbols-outlined">schedule</span>
+                                    <span x-text="'Lleva ' + sel.now.late_by + ' de retraso'"></span>
+                                </li>
+                                <li x-show="sel.now.phone">
+                                    <span class="material-symbols-outlined">call</span>
+                                    <a x-bind:href="'tel:' + sel.now.phone" x-text="sel.now.phone"></a>
+                                </li>
+                                <li x-show="sel.now.occasion">
+                                    <span class="material-symbols-outlined">celebration</span>
+                                    <span x-text="sel.now.occasion"></span>
+                                </li>
+                                <li x-show="sel.now.notes">
+                                    <span class="material-symbols-outlined">sticky_note_2</span>
+                                    <span x-text="sel.now.notes"></span>
+                                </li>
+                                <li x-show="sel.now.risky" class="is-bad">
+                                    <span class="material-symbols-outlined">warning</span>
+                                    <span x-text="sel.now.risky + ' no-shows anteriores'"></span>
+                                </li>
+                            </ul>
+                            <div class="zs-panel-actions">
+                                <span x-html="sel.now.step"></span>
+                                <a class="zs-btn" x-bind:href="sel.now.url">Abrir ficha</a>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="sel.now && sel.now.kind === 'block'">
+                        <div class="zs-panel-sec">
+                            <p class="zs-panel-label">Bloqueada</p>
+                            <p class="zs-panel-text"><b x-text="sel.now.reason"></b></p>
+                            <p class="zs-panel-text" x-text="sel.now.range + ' · quedan ' + sel.now.remaining"></p>
+                        </div>
+                    </template>
+
+                    <template x-if="!sel.now">
+                        <div class="zs-panel-sec">
+                            <p class="zs-panel-label">Ahora</p>
+                            <p class="zs-panel-text">
+                                <b>Libre</b><span x-text="sel.next ? ' durante ' + sel.next.in : ' el resto del servicio'"></span>.
+                            </p>
+                            {% if is_now and can_walk_in %}
+                                {# Llega alguien sin reserva: se sienta aqui y la mesa #}
+                                {# deja de estar disponible tambien para la web.       #}
+                                <form method="post" action="{{ walk_in_url }}" class="zs-walkin">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="table" x-bind:value="sel.id">
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <p class="zs-walkin-title">Sentar sin reserva</p>
+                                    <div class="zs-walkin-party">
+                                        <button type="button" aria-label="Una persona menos"
+                                                x-on:click="$refs.party.stepDown()">−</button>
+                                        <input type="number" name="party" x-ref="party" required
+                                               x-bind:min="1" x-bind:max="sel.max" x-bind:value="sel.min"
+                                               aria-label="Personas">
+                                        <button type="button" aria-label="Una persona más"
+                                                x-on:click="$refs.party.stepUp()">+</button>
+                                        <span>personas</span>
+                                    </div>
+                                    <input type="text" name="name" class="zs-input" placeholder="Nombre (opcional)" maxlength="120">
+                                    <input type="tel" name="phone" class="zs-input" placeholder="Teléfono (opcional)">
+                                    <button type="submit" class="zs-btn zs-btn--solid">
+                                        <span class="material-symbols-outlined">chair</span> Sentar ahora
+                                    </button>
+                                    <p class="zs-walkin-note" x-show="sel.next" x-text="sel.next ? 'Hay reserva a las ' + sel.next.time + ': la mesa queda ocupada hasta entonces.' : ''"></p>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </template>
+
+                    <template x-if="sel.next">
+                        <div class="zs-panel-sec">
+                            <p class="zs-panel-label">Después</p>
+                            <a class="zs-panel-who" x-bind:href="sel.next.url">
+                                <b x-text="sel.next.time + ' · ' + sel.next.guest"></b>
+                                <span x-text="sel.next.party + ' personas · en ' + sel.next.in"></span>
+                            </a>
+                            <div class="zs-panel-actions" x-show="!sel.now">
+                                <span x-html="sel.next.step"></span>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="zs-panel-sec">
+                        <p class="zs-panel-label">Todo el servicio en esta mesa</p>
+                        <template x-if="!sel.day.length">
+                            <p class="zs-panel-text">Sin reservas en este servicio.</p>
+                        </template>
+                        <ol class="zs-panel-day">
+                            <template x-for="row in sel.day">
+                                <li x-bind:class="{ 'is-current': row.is_current }">
+                                    <i class="zs-tl-dot" x-bind:data-tone="row.tone"></i>
+                                    <span class="zs-panel-day-time" x-text="row.time"></span>
+                                    <template x-if="row.url">
+                                        <a x-bind:href="row.url" x-text="row.label"></a>
+                                    </template>
+                                    <template x-if="!row.url">
+                                        <span x-text="row.label"></span>
+                                    </template>
+                                </li>
+                            </template>
+                        </ol>
+                    </div>
+                </div>
+            </template>
+        </aside>
+    </div>
+
+    {# Ocupacion por horas ----------------------------------------------- #}
+    <section class="zs-card zs-tl-card">
+        <div class="zs-card-head">
+            <h3><span class="material-symbols-outlined">view_timeline</span> Ocupación por horas</h3>
+            <span>
+                {{ tl_range }}
+                {% if tl_peak and tl_peak.tables %}· pico a las {{ tl_peak.label }} con {{ tl_peak.tables }} mesas{% endif %}
+            </span>
+        </div>
+
+        {% if not tl_has_data %}
+            <div class="zs-tl-empty">
+                <span class="material-symbols-outlined">event_available</span>
+                <div>
+                    <b>Sin reservas en este servicio</b>
+                    <span>Cuando haya, aquí verás cada mesa hora a hora.</span>
+                </div>
+            </div>
+        {% else %}
+        <div class="zs-tl-scroll">
+            <div class="zs-tl" style="--hour:{{ tl_hour_width|stringformat:'.4f' }}%;{% if tl_at is not None %}--at:{{ tl_at|stringformat:'.3f' }}%;{% endif %}{% if tl_now is not None %}--now:{{ tl_now|stringformat:'.3f' }}%;{% endif %}"
+                 data-at="{% if tl_at is not None %}1{% else %}0{% endif %}" data-now="{% if tl_now is not None %}1{% else %}0{% endif %}">
+
+                {# Regla de horas #}
+                <div class="zs-tl-row zs-tl-row--head">
+                    <div class="zs-tl-label"></div>
+                    <div class="zs-tl-track zs-tl-ruler">
+                        {% for h in tl_hours %}
+                            <span style="left:{{ h.pct|stringformat:'.3f' }}%">{{ h.label }}<small>h</small></span>
+                        {% endfor %}
+                        <span class="zs-tl-hover-tag" x-show="hover !== null" x-cloak
+                              x-bind:style="'left:' + hover + '%'" x-text="hoverLabel"></span>
+                    </div>
+                </div>
+
+                {# Tira de ocupacion: mesas ocupadas cada media hora #}
+                <div class="zs-tl-row zs-tl-row--heat">
+                    <div class="zs-tl-label">
+                        <b>Mesas</b><small>ocupadas</small>
+                    </div>
+                    <div class="zs-tl-track zs-tl-heat">
+                        {% for s in tl_slots %}
+                            <a href="{{ s.url }}" class="zs-tl-slot{% if s.is_at %} is-at{% endif %}"
+                               title="{{ s.label }} · {{ s.tables }} de {{ tables|length }} mesas · {{ s.people }} personas">
+                                {% if s.tables %}<em>{{ s.tables }}</em>{% endif %}
+                                <i style="height:{{ s.bar_px }}px"></i>
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% for area in tl_areas %}
+                    <div class="zs-tl-row zs-tl-row--area">
+                        <div class="zs-tl-label">
+                            <span class="material-symbols-outlined">{{ area.icon }}</span> {{ area.name }}
+                        </div>
+                        <div class="zs-tl-track"></div>
+                    </div>
+                    {% for t in area.tables %}
+                        <div class="zs-tl-row" x-bind:class="{ 'is-selected': selId === '{{ t.pk }}' }">
+                            <button type="button" class="zs-tl-label" x-on:click="pick('{{ t.pk }}', true)">
+                                <i class="zs-swatch" data-state="{{ t.state }}"></i>
+                                <b>{{ t.code }}</b><small>{{ t.min_seats }}-{{ t.max_seats }}</small>
+                            </button>
+                            <div class="zs-tl-track"
+                                 x-on:mousemove="hoverAt($event)" x-on:mouseleave="hover = null"
+                                 x-on:click.self="goAt($event)"
+                                 title="Clic para ver la sala a esa hora">
+                                {% for b in t.bars %}
+                                    <a class="zs-tl-bar{% if b.is_current %} is-current{% endif %}" data-tone="{{ b.tone }}"
+                                       {% if b.url %}href="{{ b.url }}"{% endif %}
+                                       style="{{ b.style }}"
+                                       title="{{ b.time }} · {{ b.label }}{% if b.party %} · {{ b.party }} personas{% endif %} · {{ b.status }}">
+                                        <b>{{ b.label }}</b>{% if b.party %}<span>{{ b.party }}p</span>{% endif %}
+                                    </a>
+                                {% endfor %}
+                                <i class="zs-tl-hover" x-show="hover !== null" x-cloak x-bind:style="'left:' + hover + '%'"></i>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+
+            </div>
+        </div>
+
+        <div class="zs-tl-foot">
+            {% for tone, label in tl_legend %}
+                <span><i class="zs-tl-dot" data-tone="{{ tone }}"></i>{{ label }}</span>
+            {% endfor %}
+            <span class="zs-tl-foot-hint">
+                <i class="zs-tl-marker-sample"></i>
+                {% if is_now %}ahora{% else %}hora que estás viendo{% endif %} · clic en la línea para saltar a otra hora
+            </span>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+function zsFloor() {
+    var datos = JSON.parse(document.getElementById("zs-floor-data").textContent);
+    var ventana = JSON.parse(document.getElementById("zs-tl-window").textContent);
+
+    return {
+        tables: datos,
+        selId: null,
+        edit: false,
+        saving: false,
+        moved: {},
+        hover: null,
+        hoverLabel: "",
+
+        get sel() {
+            return this.selId ? Object.assign({ id: this.selId }, this.tables[this.selId]) : null;
+        },
+
+        init() {
+            // La mesa abierta sobrevive a la recarga automatica via #hash.
+            var id = window.location.hash.slice(1);
+            if (id && this.tables[id]) { this.selId = id; }
+
+            if (this.$root.dataset.live === "1") {
+                var self = this;
+                setInterval(function () {
+                    if (!document.hidden && !self.edit) { window.location.reload(); }
+                }, 60000);
+            }
+        },
+
+        pick(id, scroll) {
+            if (this.edit && id) { this.selId = id; return; }
+            this.selId = this.selId === id ? null : id;
+            history.replaceState(null, "", this.selId ? "#" + this.selId : window.location.pathname + window.location.search);
+            // Desde la linea de tiempo: sube al plano para ver la mesa.
+            if (scroll && this.selId) {
+                this.$refs.plan.scrollIntoView({ behavior: "smooth", block: "center" });
+            } else if (this.selId && window.innerWidth <= 1100) {
+                // En tablet el panel queda debajo del plano: se baja hasta el.
+                var panel = this.$root.querySelector(".zs-floor-panel");
+                this.$nextTick(function () {
+                    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            }
+        },
+
+        // --- Linea de tiempo ----------------------------------------------
+
+        // Minutos desde la apertura -> fecha y hora locales del local. Se
+        // calcula en UTC a proposito: la zona del navegador no importa.
+        momentAt(e) {
+            var r = e.currentTarget.getBoundingClientRect();
+            var pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+            var min = Math.round(pct * ventana.total / 15) * 15;
+            var t = new Date(Date.UTC(ventana.y, ventana.m - 1, ventana.d, ventana.h, ventana.mi) + min * 60000);
+            var dos = function (n) { return String(n).padStart(2, "0"); };
+            return {
+                pct: min / ventana.total * 100,
+                fecha: t.getUTCFullYear() + "-" + dos(t.getUTCMonth() + 1) + "-" + dos(t.getUTCDate()),
+                hora: dos(t.getUTCHours()) + ":" + dos(t.getUTCMinutes())
+            };
+        },
+
+        hoverAt(e) {
+            var m = this.momentAt(e);
+            this.hover = m.pct;
+            this.hoverLabel = m.hora;
+        },
+
+        goAt(e) {
+            var m = this.momentAt(e);
+            var q = new URLSearchParams({ local: ventana.local, fecha: m.fecha, hora: m.hora });
+            window.location.href = "?" + q.toString() + (this.selId ? "#" + this.selId : "");
+        },
+
+        // --- Edicion ------------------------------------------------------
+
+        startEdit() {
+            this.edit = true;
+            this.moved = {};
+            // En vista normal el plano va recortado a las mesas; para editar se
+            // vuelve al lienzo completo, que es donde viven las coordenadas.
+            this.$refs.plan.querySelectorAll(".zs-ft").forEach(function (el) {
+                el.style.left = el.dataset.rx + "%";
+                el.style.top = el.dataset.ry + "%";
+            });
+            this.$refs.plan.scrollIntoView({ behavior: "smooth", block: "center" });
+        },
+
+        cancelEdit() {
+            window.location.reload();
+        },
+
+        place(el, x, y) {
+            x = Math.min(98, Math.max(2, x));
+            y = Math.min(96, Math.max(4, y));
+            el.style.left = x.toFixed(2) + "%";
+            el.style.top = y.toFixed(2) + "%";
+            this.moved[el.dataset.id] = [x, y];
+        },
+
+        dragStart(e) {
+            if (!this.edit) { return; }
+            var el = e.currentTarget;
+            var plan = this.$refs.inner.getBoundingClientRect();
+            var self = this;
+            el.setPointerCapture(e.pointerId);
+            el.classList.add("is-dragging");
+            this.selId = el.dataset.id;
+
+            var mover = function (ev) {
+                self.place(el,
+                    (ev.clientX - plan.left) / plan.width * 100,
+                    (ev.clientY - plan.top) / plan.height * 100);
+            };
+            var soltar = function () {
+                el.classList.remove("is-dragging");
+                el.removeEventListener("pointermove", mover);
+                el.removeEventListener("pointerup", soltar);
+                el.removeEventListener("pointercancel", soltar);
+            };
+            el.addEventListener("pointermove", mover);
+            el.addEventListener("pointerup", soltar);
+            el.addEventListener("pointercancel", soltar);
+        },
+
+        nudge(e, id) {
+            if (!this.edit) { return; }
+            var paso = e.shiftKey ? 5 : 1;
+            var d = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0],
+                      ArrowUp: [0, -paso], ArrowDown: [0, paso] }[e.key];
+            if (!d) { return; }
+            e.preventDefault();
+            var el = e.currentTarget;
+            this.place(el, parseFloat(el.style.left) + d[0], parseFloat(el.style.top) + d[1]);
+        },
+
+        save() {
+            var self = this;
+            if (!Object.keys(this.moved).length) { this.edit = false; return; }
+            this.saving = true;
+            fetch(this.$root.dataset.positionsUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json",
+                           "X-CSRFToken": this.$root.dataset.csrf },
+                body: JSON.stringify(this.moved)
+            }).then(function (r) {
+                if (!r.ok) { throw new Error(r.status); }
+                window.location.reload();
+            }).catch(function () {
+                self.saving = false;
+                window.alert("No se pudo guardar el plano. Revisa la conexión e inténtalo de nuevo.");
+            });
+        }
+    };
+}
+</script>
+
+{% endif %}
+</div>
+{% endblock %}

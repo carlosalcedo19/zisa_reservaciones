@@ -1,0 +1,41 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+Barra de acciones al pie de la ficha, no en la cabecera.
+
+Solo se pintan las transiciones que el estado actual admite, asi que no
+aparece "Sentar" en una reserva cancelada ni "Confirmar" en una que ya paso
+por caja. Cada boton lleva a una URL propia registrada en ReservationAdmin.
+{% endcomment %}
+
+{% block form_after %}
+    {% if reservation_obj %}
+        <div class="zs-actions">
+            <div class="zs-actions-state">
+                <span class="zs-chip" data-tone="{{ reservation_tone|default:'muted' }}">
+                    {{ reservation_obj.get_status_display }}
+                </span>
+                <span>
+                    {% if reservation_obj.is_live %}
+                        Ocupa {{ reservation_obj.table_codes }} hasta las
+                        {{ reservation_obj.ends_at|time:"H:i" }}.
+                    {% else %}
+                        La mesa ya está liberada.
+                    {% endif %}
+                </span>
+            </div>
+
+            {% if reservation_actions %}
+                <div class="zs-actions-buttons">
+                    {% for a in reservation_actions %}
+                        <a href="{{ a.url }}" class="zs-btn zs-btn--lg{% if a.tone %} zs-btn--{{ a.tone }}{% endif %}">
+                            <span class="material-symbols-outlined">{{ a.icon }}</span>
+                            {{ a.label }}
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <span class="zs-actions-none">Esta reserva ya está cerrada.</span>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% load i18n static %}
+{% comment %}
+Cabecera del formulario de login: logo del restaurante y saludo. Unfold no
+trae traduccion al espanol de su saludo, asi que va escrito aqui.
+{% endcomment %}
+
+<div class="zs-login-title">
+    <img src="{% static 'admin/img/zisa-logo.png' %}" alt="Zisá Restaurante" class="zs-login-logo">
+    {% if subtitle == "Welcome back to" %}
+        <h1>Te damos la bienvenida</h1>
+        <p>Inicia sesión para gestionar las reservas.</p>
+    {% else %}
+        <h1>{{ title }}</h1>
+        {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+    {% endif %}
+</div>

@@ -1,0 +1,44 @@
+{% extends 'unfold/layouts/skeleton.html' %}
+{% load i18n static unfold %}
+{% comment %}
+Login y demas paginas sin sesion. Sustituye al de Unfold para dar a la foto
+del salon el mismo peso que al formulario (en el de serie queda como una
+franja pegada al borde) y ponerle un pie. Estilos en static/admin/zisa.css.
+{% endcomment %}
+
+{% block bodyclass %}{{ block.super }}login{% endblock %}
+
+{% block usertools %}{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block nav-sidebar %}{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block title %}
+    {{ title }} | {{ site_title }}
+{% endblock %}
+
+{% block base %}
+    <div id="page" class="zs-login{% if not login_image %} zs-login--solo{% endif %}">
+        <main class="zs-login-main">
+            {% include "unfold/helpers/unauthenticated_header.html" %}
+
+            <div class="zs-login-box">
+                {% block content %}{% endblock %}
+            </div>
+
+            <p class="zs-login-foot">Zisá Restaurante · Panel de reservaciones</p>
+        </main>
+
+        {% if login_image %}
+            <aside class="zs-login-photo" style="background-image: url('{{ login_image }}')" aria-hidden="true">
+                <div class="zs-login-caption">
+                    <b>Todo el servicio en un solo lugar</b>
+                    <span>Reservas, plano de sala y llegadas del día.</span>
+                </div>
+            </aside>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,0 +1,23 @@
+# Blueprint de Render: New > Blueprint, elegir este repositorio.
+# Las variables marcadas sync: false se piden al crear el servicio.
+services:
+  - type: web
+    name: zisa-reservas
+    runtime: python
+    plan: free
+    region: virginia   # la mas cercana a Lima; crea Neon en AWS us-east-1
+    buildCommand: bash build.sh
+    startCommand: gunicorn wapp.wsgi:application --workers 2 --timeout 60
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: TIME_ZONE
+        value: America/Lima
+      - key: DATABASE_URL
+        sync: false   # cadena de conexion de Neon
+      - key: WEB_RESERVATION_TOKEN
+        sync: false   # la misma que ZISA_RESERVAS_TOKEN en wp-config.php
+      - key: CRON_TOKEN
+        sync: false   # la que usara cron-job.org

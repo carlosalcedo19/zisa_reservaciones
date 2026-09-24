@@ -1,0 +1,3250 @@
+/*
+ * Zisa - capa propia sobre Unfold.
+ *
+ * Unfold trae un build parcial de Tailwind, asi que en vez de arriesgarnos a
+ * usar clases que no esten compiladas, todo lo propio va aqui con nombres
+ * `zs-`. Los neutros salen de las variables que Unfold inyecta a partir de
+ * UNFOLD["COLORS"], asi que la paleta se cambia en un solo sitio.
+ *
+ * Unfold marca el modo oscuro con la clase `dark` en <html>.
+ */
+
+/* ===================================================================== */
+/* Tokens                                                                */
+/* ===================================================================== */
+
+:root {
+  --zs-ink: var(--color-base-950);
+  --zs-ink-soft: var(--color-base-500);
+  --zs-ink-faint: var(--color-base-400);
+  --zs-surface: #fff;
+  --zs-surface-2: var(--color-base-50);
+  --zs-line: var(--color-base-200);
+  --zs-line-soft: var(--color-base-200);
+
+  /* Grafito. Minimalista: el acento es tinta, no un color. */
+  --zs-accent: #18181b;
+  --zs-accent-hover: #3f3f46;
+  --zs-accent-wash: #f4f4f5;
+  --zs-on-accent: #fff;
+
+  /*
+   * Colores de estado. Son los unicos con tinte propio ademas del azul: el
+   * estado de una reserva se tiene que reconocer de un vistazo, y en escala
+   * de grises todos los chips acaban pareciendo el mismo.
+   */
+  --zs-warn: #92400e;
+  --zs-warn-bg: #fdf3dd;
+  --zs-info: #1e40af;
+  --zs-info-bg: #e6edfb;
+  --zs-ok: #0f5d47;
+  --zs-ok-bg: #e0f2ea;
+  --zs-bad: #9f1239;
+  --zs-bad-bg: #fce8ed;
+  --zs-muted: var(--color-base-500);
+  --zs-muted-bg: var(--color-base-100);
+
+  /* Sin sombras: las superficies se separan con filetes de 1px. */
+  --zs-shadow: none;
+  --zs-radius: var(--border-radius, 8px);
+  --zs-radius-lg: calc(var(--border-radius, 8px) + 4px);
+}
+
+.dark {
+  --zs-ink: var(--color-base-100);
+  --zs-ink-soft: var(--color-base-400);
+  --zs-ink-faint: var(--color-base-500);
+  --zs-surface: var(--color-base-900);
+  --zs-surface-2: var(--color-base-800);
+  --zs-line: var(--color-base-800);
+  --zs-line-soft: var(--color-base-800);
+
+  --zs-accent: #f4f4f5;
+  --zs-accent-hover: #d4d4d8;
+  --zs-accent-wash: #232326;
+  --zs-on-accent: #18181b;
+
+  --zs-warn: #e8b45c;
+  --zs-warn-bg: #33270f;
+  --zs-info: #93b4ec;
+  --zs-info-bg: #182741;
+  --zs-ok: #63c8a4;
+  --zs-ok-bg: #102c23;
+  --zs-bad: #f09aab;
+  --zs-bad-bg: #351720;
+  --zs-muted: var(--color-base-400);
+  --zs-muted-bg: var(--color-base-800);
+
+  --zs-shadow: none;
+}
+
+/*
+ * Modo oscuro de Unfold: sus botones usan bg-primary-600 + text-white en los
+ * dos temas. Con el acento grafito eso seria negro sobre negro, asi que en
+ * oscuro el 600 pasa a casi blanco y el texto encima a oscuro. html.dark gana
+ * a la hoja :root que inyecta Unfold con los colores de settings.
+ */
+html.dark {
+  --color-primary-600: oklch(96% 0 0);
+  --color-primary-500: oklch(88% 0 0);
+  --color-primary-400: oklch(80% 0 0);
+}
+
+html.dark .bg-primary-600.text-white,
+html.dark .bg-primary-600 .text-white,
+html.dark .bg-primary-600 > .material-symbols-outlined {
+  color: var(--color-base-950) !important;
+}
+
+/* ===================================================================== */
+/* Cabecera                                                              */
+/* ===================================================================== */
+
+.zs-nav {
+  align-items: center;
+  background: var(--zs-surface);
+  border-bottom: 1px solid var(--zs-line);
+  display: flex;
+  gap: 16px;
+  height: 60px;
+  margin-bottom: 26px;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.zs-nav-left {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.zs-nav-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink-soft);
+  cursor: pointer;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.zs-nav-toggle:hover {
+  background: var(--zs-surface-2);
+  color: var(--zs-ink);
+}
+
+.zs-nav-rule {
+  background: var(--zs-line);
+  height: 22px;
+  width: 1px;
+}
+
+.zs-nav-title {
+  color: var(--zs-ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-nav-count {
+  color: var(--zs-ink-faint);
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.zs-nav-right {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.zs-nav-clock {
+  align-items: baseline;
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  display: flex;
+  gap: 8px;
+  padding: 5px 11px;
+}
+
+.zs-nav-clock b {
+  color: var(--zs-ink);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zs-nav-clock span {
+  color: var(--zs-ink-faint);
+  font-size: 0.75rem;
+  text-transform: capitalize;
+}
+
+/* Boton "Nueva reserva" de la cabecera: se queda en icono en pantallas chicas. */
+.zs-nav-new {
+  height: 38px;
+  padding: 0 14px;
+}
+
+/* Corte xl de Unfold (1280px): por debajo la barra lateral es un cajon. */
+.zs-only-mobile {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .zs-only-desktop {
+    display: none;
+  }
+
+  .zs-only-mobile {
+    display: flex;
+  }
+}
+
+@media (max-width: 760px) {
+  .zs-nav {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .zs-nav-clock span,
+  .zs-nav-new-text {
+    display: none;
+  }
+
+  .zs-nav-new {
+    justify-content: center;
+    padding: 0;
+    width: 38px;
+  }
+}
+
+@media (max-width: 480px) {
+  .zs-nav-clock {
+    display: none;
+  }
+}
+
+/* ===================================================================== */
+/* Botones                                                               */
+/* ===================================================================== */
+
+.zs-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink-soft);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.8rem;
+  font-weight: 500;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  white-space: nowrap;
+}
+
+.zs-btn:hover {
+  background: var(--zs-surface-2);
+  border-color: var(--zs-ink-faint);
+  color: var(--zs-ink);
+}
+
+.zs-btn--solid {
+  background: var(--zs-accent);
+  border-color: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-btn--solid:hover {
+  background: var(--zs-accent-hover);
+  border-color: var(--zs-accent-hover);
+  color: var(--zs-on-accent);
+}
+
+.zs-btn--icon {
+  justify-content: center;
+  padding: 0;
+  width: 32px;
+}
+
+.zs-btn--lg {
+  font-size: 0.85rem;
+  height: 38px;
+  padding: 0 15px;
+}
+
+.zs-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Menu de usuario de la cabecera */
+
+.zs-user {
+  position: relative;
+}
+
+.zs-user-trigger {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+}
+
+/* 38px: el mismo diametro que el boton "+" de Unfold (add_link.html). */
+.zs-avatar {
+  align-items: center;
+  background: var(--zs-accent);
+  border: 2px solid transparent;
+  border-radius: 50%;
+  color: var(--zs-on-accent);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.zs-user-trigger:hover .zs-avatar {
+  border-color: var(--zs-ink-faint);
+}
+
+.zs-user-menu {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  box-shadow: 0 12px 32px -12px rgb(16 24 40 / 30%);
+  min-width: 215px;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: 48px;
+  z-index: 60;
+}
+
+.zs-user-head {
+  border-bottom: 1px solid var(--zs-line-soft);
+  margin-bottom: 4px;
+  padding: 8px 10px 10px;
+}
+
+.zs-user-head b {
+  color: var(--zs-ink);
+  display: block;
+  font-size: 0.82rem;
+}
+
+.zs-user-head span {
+  color: var(--zs-ink-faint);
+  font-size: 0.74rem;
+}
+
+.zs-user-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--zs-radius) - 3px);
+  color: var(--zs-ink-soft);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.82rem;
+  gap: 9px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.zs-user-item:hover {
+  background: var(--zs-surface-2);
+  color: var(--zs-ink);
+}
+
+.zs-user-item .material-symbols-outlined {
+  font-size: 17px;
+}
+
+/* ===================================================================== */
+/* Panel de inicio                                                       */
+/* ===================================================================== */
+
+.zs-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 40px;
+  padding-top: 4px;
+}
+
+/*
+ * Portada. Fondo lavado en vez de filete: abre la pagina con algo de aire
+ * en lugar de con otra caja mas.
+ */
+/* Portada: sin caja de fondo, solo tipografia y un filete debajo. */
+.zs-hero {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--zs-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 6px 0 22px;
+}
+
+.zs-hero h1 {
+  color: var(--zs-ink);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.zs-hero p {
+  color: var(--zs-ink-soft);
+  font-size: 0.92rem;
+  margin: 7px 0 0;
+  max-width: 62ch;
+}
+
+.zs-hero p b {
+  color: var(--zs-ink);
+  font-weight: 600;
+}
+
+.zs-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+/*
+ * Titulos de bloque. En caja normal y con icono: la versalita apretada de
+ * antes hacia que la pagina se leyera como un formulario oficial.
+ */
+.zs-section {
+  align-items: center;
+  color: var(--zs-ink);
+  display: flex;
+  font-size: 1.02rem;
+  font-weight: 600;
+  gap: 9px;
+  letter-spacing: -0.01em;
+  margin: 14px 0 -2px;
+}
+
+/* Si el panel abre con un titulo de bloque, sin margen extra arriba. */
+.zs-dash > .zs-section:first-child {
+  margin-top: 0;
+}
+
+.zs-section .material-symbols-outlined {
+  color: var(--zs-ink-faint);
+  font-size: 20px;
+}
+
+/* Aviso */
+
+.zs-alert {
+  align-items: center;
+  background: var(--zs-bad-bg);
+  border-radius: var(--zs-radius);
+  color: var(--zs-bad);
+  display: flex;
+  font-size: 0.88rem;
+  gap: 10px;
+  padding: 13px 16px;
+}
+
+.zs-alert .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.zs-alert a {
+  color: inherit;
+  font-weight: 600;
+  margin-left: auto;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+/*
+ * Baldosas de cifras. Cada una es su propia tarjeta con sombra suave, en
+ * vez de celdas separadas por lineas de un pixel.
+ */
+
+.zs-tiles {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.zs-tiles--6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1400px) {
+  .zs-tiles--6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .zs-tiles,
+  .zs-tiles--6 {
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  }
+
+  .zs-hero {
+    padding: 20px;
+  }
+
+  .zs-hero h1 {
+    font-size: 1.35rem;
+  }
+
+  .zs-hero-actions,
+  .zs-hero-actions .zs-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+.zs-tile {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line-soft);
+  border-radius: var(--zs-radius-lg);
+  box-shadow: var(--zs-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 18px 18px;
+}
+
+.zs-tile-icon {
+  color: var(--zs-ink-faint);
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.zs-tile-value {
+  color: var(--zs-ink);
+  font-size: 1.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.zs-tile-label {
+  color: var(--zs-ink);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.zs-tile-hint {
+  color: var(--zs-ink-faint);
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-tile[data-tone="bad"] .zs-tile-icon,
+.zs-tile[data-tone="bad"] .zs-tile-value {
+  color: var(--zs-bad);
+}
+
+.zs-tile[data-tone="muted"] .zs-tile-icon {
+  color: var(--zs-ink-faint);
+}
+
+/* Rejilla y tarjetas */
+
+.zs-grid {
+  align-items: stretch;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .zs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.zs-card {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line-soft);
+  border-radius: var(--zs-radius-lg);
+  box-shadow: var(--zs-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.zs-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+/* Solo el estado vacio se centra en el hueco que le toca. */
+.zs-card-body:has(> .zs-empty) {
+  justify-content: center;
+}
+
+.zs-card-head {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 15px 18px 11px;
+}
+
+.zs-card-head h3 {
+  align-items: center;
+  color: var(--zs-ink);
+  display: flex;
+  font-size: 0.92rem;
+  font-weight: 600;
+  gap: 8px;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.zs-card-head h3 .material-symbols-outlined {
+  color: var(--zs-ink-faint);
+  font-size: 18px;
+}
+
+.zs-card-head span,
+.zs-card-head a {
+  color: var(--zs-ink-faint);
+  font-size: 0.76rem;
+}
+
+.zs-card-head a:hover {
+  color: var(--zs-ink);
+}
+
+.zs-legend {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.zs-dot {
+  background: var(--zs-accent);
+  border-radius: 3px;
+  display: inline-block;
+  height: 9px;
+  width: 9px;
+}
+
+/* Lista de llegadas */
+
+.zs-row {
+  align-items: center;
+  border-radius: var(--zs-radius);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto 96px;
+  margin: 0 8px;
+  padding: 9px 10px;
+  position: relative;
+}
+
+.zs-row:hover {
+  background: var(--zs-surface-2);
+}
+
+/* Las que ya pasaron su hora se marcan tambien con un filete, no solo con el chip. */
+.zs-row--late {
+  box-shadow: inset 3px 0 0 var(--zs-bad);
+}
+
+/* El nombre es el enlace; su ::after cubre la fila entera para que se
+   pueda pulsar en cualquier parte. */
+.zs-row-link {
+  color: var(--zs-ink);
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-row-link::after {
+  border-radius: inherit;
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.zs-row-step {
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  /* Hora y nombre arriba; mesa, estado y boton debajo. */
+  .zs-row {
+    gap: 6px 12px;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+  }
+
+  .zs-row-tables {
+    grid-column: 2;
+  }
+
+  .zs-row .zs-chip {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .zs-row-step {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
+.zs-card-body--flush > .zs-row:first-child {
+  margin-top: 4px;
+}
+
+.zs-card-body--flush > .zs-row:last-child {
+  margin-bottom: 10px;
+}
+
+.zs-row-time {
+  color: var(--zs-ink);
+  font-size: 0.94rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zs-row-who {
+  min-width: 0;
+}
+
+.zs-row-who b {
+  color: var(--zs-ink);
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-row-who > span {
+  color: var(--zs-ink-soft);
+  font-size: 0.76rem;
+}
+
+.zs-row-tables {
+  color: var(--zs-ink-soft);
+  font-size: 0.79rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Chips de estado: fondo suave con su color, siempre con texto. El estado
+ * nunca se codifica solo con color.
+ */
+
+.zs-chip {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 0.71rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.zs-chip[data-tone="ok"] {
+  background: var(--zs-ok-bg);
+  color: var(--zs-ok);
+}
+
+.zs-chip[data-tone="info"] {
+  background: var(--zs-info-bg);
+  color: var(--zs-info);
+}
+
+.zs-chip[data-tone="warn"] {
+  background: var(--zs-warn-bg);
+  color: var(--zs-warn);
+}
+
+.zs-chip[data-tone="bad"] {
+  background: var(--zs-bad-bg);
+  color: var(--zs-bad);
+}
+
+.zs-chip[data-tone="muted"] {
+  background: var(--zs-muted-bg);
+  color: var(--zs-muted);
+}
+
+/* Etiquetas de cliente: color elegido por el equipo, mezclado con la
+   superficie para que se lea igual en claro y en oscuro. */
+.zs-chip--tag {
+  background: color-mix(in oklab, var(--tag) 14%, var(--zs-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tag) 35%, transparent);
+  color: color-mix(in oklab, var(--tag) 75%, var(--zs-ink));
+  font-weight: 500;
+}
+
+/* ===================================================================== */
+/* Siguiente paso (lista de reservas y panel)                            */
+/* ===================================================================== */
+
+.zs-step {
+  align-items: center;
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.zs-step:hover {
+  background: var(--zs-accent);
+  border-color: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-step .material-symbols-outlined {
+  font-size: 17px;
+}
+
+@media (pointer: coarse) {
+  /* En tablet, objetivos de al menos 40px. */
+  .zs-step {
+    height: 40px;
+    padding: 0 14px 0 12px;
+  }
+}
+
+/* ===================================================================== */
+/* Listas (changelist)                                                   */
+/* ===================================================================== */
+
+/* Celda de dos lineas: dato principal y detalle debajo. */
+.zs-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.3;
+}
+
+.zs-cell b {
+  align-items: center;
+  color: var(--zs-ink);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.zs-cell small {
+  color: var(--zs-ink-faint);
+  font-size: 0.76rem;
+}
+
+.zs-cell-time {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#result_list tbody tr:hover > td,
+#result_list tbody tr:hover > th {
+  background-color: var(--zs-surface-2);
+}
+
+.zs-more {
+  border-top: 1px solid var(--zs-line-soft);
+  color: var(--zs-ink-soft);
+  display: block;
+  font-size: 0.81rem;
+  padding: 12px 18px;
+  text-align: center;
+}
+
+.zs-more:hover {
+  background: var(--zs-surface-2);
+  color: var(--zs-ink);
+}
+
+/* Turnos */
+
+.zs-shift {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 18px 15px;
+}
+
+.zs-shift + .zs-shift {
+  border-top: 1px solid var(--zs-line-soft);
+}
+
+.zs-shift-top {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.zs-shift-top b {
+  color: var(--zs-ink);
+  font-size: 0.87rem;
+}
+
+.zs-shift-top span {
+  color: var(--zs-ink-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.zs-bar {
+  background: var(--zs-surface-2);
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+}
+
+.zs-bar i {
+  background: var(--zs-accent);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+  min-width: 7px;
+}
+
+/* Graficos (Chart.js, el que ya trae Unfold) */
+
+.zs-chart {
+  flex: 1;
+  min-height: 230px;
+  padding: 4px 18px 18px;
+  position: relative;
+}
+
+/* Sala */
+
+.zs-area {
+  padding: 11px 18px 14px;
+}
+
+.zs-area + .zs-area {
+  border-top: 1px solid var(--zs-line-soft);
+}
+
+.zs-area-name {
+  align-items: center;
+  color: var(--zs-ink-soft);
+  display: flex;
+  font-size: 0.79rem;
+  font-weight: 500;
+  gap: 6px;
+  margin: 0 0 9px;
+}
+
+.zs-area-name .material-symbols-outlined {
+  font-size: 16px;
+  opacity: 0.55;
+}
+
+.zs-tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.zs-table {
+  background: var(--zs-surface-2);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink-soft);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 10px;
+}
+
+.zs-table[data-busy="true"] {
+  background: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-table b {
+  font-weight: 600;
+}
+
+.zs-table i {
+  font-style: normal;
+  margin-left: 5px;
+  opacity: 0.65;
+}
+
+/* Vacios */
+
+.zs-empty {
+  align-items: center;
+  color: var(--zs-ink-faint);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.86rem;
+  gap: 8px;
+  padding: 30px 18px 34px;
+  text-align: center;
+}
+
+.zs-empty .material-symbols-outlined {
+  font-size: 28px;
+  opacity: 0.4;
+}
+
+:where(.zs-dash, .zs-nav) a {
+  text-decoration: none;
+}
+
+.zs-nav :focus-visible,
+.zs-dash :focus-visible,
+.zs-step:focus-visible {
+  outline: 2px solid var(--zs-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===================================================================== */
+/* Barra lateral                                                         */
+/*                                                                       */
+/* Clara y sin color: misma superficie que la pagina, separada por un    */
+/* filete. El enlace activo se marca con un fondo gris y la tinta plena. */
+/* Unfold la pinta con utilidades de Tailwind, asi que hace falta        */
+/* !important para ganarles.                                             */
+/* ===================================================================== */
+
+#nav-sidebar {
+  --side-bg: #fff;
+  --side-raise: #f4f4f5;
+  --side-line: #e4e4e7;
+  --side-ink: #18181b;
+  --side-soft: #52525b;
+  --side-dim: #a1a1aa;
+}
+
+.dark #nav-sidebar {
+  --side-bg: #0f0f11;
+  --side-raise: #1f1f23;
+  --side-line: #27272a;
+  --side-ink: #fafafa;
+  --side-soft: #a1a1aa;
+  --side-dim: #71717a;
+}
+
+#nav-sidebar,
+#nav-sidebar-inner {
+  background-color: var(--side-bg) !important;
+}
+
+#nav-sidebar {
+  border-right: 1px solid var(--side-line) !important;
+}
+
+#nav-sidebar [class*="border-base-200"],
+#nav-sidebar [class*="border-base-700"],
+#nav-sidebar [class*="border-base-800"] {
+  border-color: var(--side-line) !important;
+}
+
+/* Los titulos de grupo ya separan: los filetes entre grupos sobran. */
+#nav-sidebar #nav-sidebar-apps hr {
+  display: none;
+}
+
+#nav-sidebar,
+#nav-sidebar a,
+#nav-sidebar .text-subtle,
+#nav-sidebar [class*="text-font-default"],
+#nav-sidebar [class*="text-font-subtle"],
+#nav-sidebar [class*="placeholder-font-subtle"] {
+  color: var(--side-soft) !important;
+}
+
+#nav-sidebar .text-important,
+#nav-sidebar [class*="text-font-important"],
+#nav-sidebar #site-name,
+#nav-sidebar #site-name a {
+  color: var(--side-ink) !important;
+}
+
+/* Titulos de grupo: versalita pequena y gris (sin icono en settings). */
+#nav-sidebar #nav-sidebar-apps h2 {
+  color: var(--side-dim) !important;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.25rem;
+  margin-top: 1.2rem;
+  text-transform: uppercase;
+}
+
+#nav-sidebar #nav-sidebar-apps > div:first-child h2 {
+  margin-top: 0.25rem;
+}
+
+/* Grupos plegables (Sala, Horarios, Ajustes): se tienen que notar pulsables. */
+#nav-sidebar #nav-sidebar-apps h2.cursor-pointer {
+  border-radius: 6px;
+}
+
+#nav-sidebar #nav-sidebar-apps h2.cursor-pointer:hover {
+  background-color: var(--side-raise) !important;
+  color: var(--side-ink) !important;
+}
+
+#nav-sidebar #nav-sidebar-apps h2 .material-symbols-outlined {
+  font-size: 16px;
+}
+
+#nav-sidebar ol a .material-symbols-outlined {
+  color: var(--side-dim);
+}
+
+#nav-sidebar ol a:hover {
+  background-color: var(--side-raise) !important;
+  color: var(--side-ink) !important;
+}
+
+#nav-sidebar ol a.active {
+  background-color: var(--side-raise) !important;
+  color: var(--side-ink) !important;
+  font-weight: 600;
+}
+
+#nav-sidebar ol a:hover .material-symbols-outlined,
+#nav-sidebar ol a.active .material-symbols-outlined {
+  color: var(--side-ink);
+}
+
+#nav-sidebar [class*="bg-white"] {
+  background-color: var(--side-bg) !important;
+}
+
+#nav-sidebar input[type="search"] {
+  background-color: transparent !important;
+  color: var(--side-ink) !important;
+}
+
+#nav-sidebar input[type="search"]::placeholder {
+  color: var(--side-dim) !important;
+}
+
+#nav-sidebar kbd {
+  background-color: var(--side-raise) !important;
+  border-color: var(--side-line) !important;
+  color: var(--side-soft) !important;
+}
+
+#nav-sidebar [class*="hover:bg-base-100"]:hover,
+#nav-sidebar [class*="hover:bg-base-800"]:hover {
+  background-color: var(--side-raise) !important;
+}
+
+#nav-sidebar [class*="bg-primary-600"] {
+  background-color: var(--side-ink) !important;
+  color: var(--side-bg) !important;
+}
+
+#nav-sidebar [class*="bg-base-50"],
+#nav-sidebar [class*="bg-base-100"],
+#nav-sidebar [class*="bg-base-200"] {
+  background-color: transparent !important;
+}
+
+#nav-sidebar [class*="text-base-400"] {
+  color: var(--side-dim) !important;
+}
+
+#nav-sidebar [class*="hover:text-base-700"]:hover {
+  color: var(--side-ink) !important;
+}
+
+/* ===================================================================== */
+/* Sin translucidos                                                      */
+/*                                                                       */
+/* Unfold marca los estados bajando la opacidad del fondo (bg-.../80) y  */
+/* pone la barra de guardado semitransparente con desenfoque. Sobre el   */
+/* contenido eso se lee como un degradado. Aqui todo pasa a color solido. */
+/* ===================================================================== */
+
+[class*="hover:bg-primary-600/"]:hover {
+  background-color: var(--zs-accent-hover) !important;
+}
+
+[class*="hover:bg-base-100/"]:hover {
+  background-color: var(--color-base-100) !important;
+}
+
+.dark [class*="dark:hover:bg-base-800/"]:hover {
+  background-color: var(--color-base-800) !important;
+}
+
+/* El velo del modal (bg-base-900/80) se queda translucido a proposito. */
+[class*="bg-white/80"] {
+  backdrop-filter: none !important;
+  background-color: var(--zs-surface) !important;
+}
+
+/* ===================================================================== */
+/* Formulario de cancelacion                                             */
+/* ===================================================================== */
+
+.zs-btn--danger {
+  background: var(--zs-bad);
+  border-color: var(--zs-bad);
+  color: #fff;
+}
+
+.zs-btn--danger:hover {
+  background: var(--zs-bad);
+  border-color: var(--zs-bad);
+  color: #fff;
+  filter: brightness(1.12);
+}
+
+.zs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 18px 20px;
+}
+
+.zs-reasons {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.zs-reason {
+  align-items: center;
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.86rem;
+  gap: 10px;
+  padding: 11px 14px;
+}
+
+.zs-reason:hover {
+  border-color: var(--zs-ink-faint);
+}
+
+.zs-reason:has(input:checked) {
+  background: var(--zs-accent-wash);
+  border-color: var(--zs-accent);
+}
+
+.zs-reason input {
+  accent-color: var(--zs-accent);
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.zs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zs-field > span {
+  color: var(--zs-ink-soft);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.zs-field input {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  font-size: 0.88rem;
+  padding: 10px 13px;
+  width: 100%;
+}
+
+.zs-field input:focus {
+  border-color: var(--zs-accent);
+  outline: none;
+}
+
+.zs-note {
+  align-items: flex-start;
+  color: var(--zs-ink-soft);
+  display: flex;
+  font-size: 0.83rem;
+  gap: 9px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.zs-note .material-symbols-outlined {
+  font-size: 18px;
+  opacity: 0.6;
+}
+
+.zs-form-actions {
+  border-top: 1px solid var(--zs-line-soft);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+/* ===================================================================== */
+/* Acciones al pie de la ficha de reserva                                */
+/* ===================================================================== */
+
+.zs-actions {
+  align-items: center;
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line-soft);
+  border-radius: var(--zs-radius-lg);
+  box-shadow: var(--zs-shadow);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 16px 18px;
+}
+
+.zs-actions-state {
+  align-items: center;
+  color: var(--zs-ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 10px;
+}
+
+.zs-actions-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.zs-actions-none {
+  color: var(--zs-ink-faint);
+  font-size: 0.85rem;
+}
+
+/* Variantes de boton por tono */
+
+.zs-btn--primary {
+  background: var(--zs-accent);
+  border-color: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-btn--primary:hover {
+  background: var(--zs-accent-hover);
+  border-color: var(--zs-accent-hover);
+  color: var(--zs-on-accent);
+}
+
+.zs-btn--ok {
+  border-color: var(--zs-ok);
+  color: var(--zs-ok);
+}
+
+.zs-btn--ok:hover {
+  background: var(--zs-ok-bg);
+  border-color: var(--zs-ok);
+  color: var(--zs-ok);
+}
+
+.zs-btn--warn {
+  border-color: var(--zs-warn);
+  color: var(--zs-warn);
+}
+
+.zs-btn--warn:hover {
+  background: var(--zs-warn-bg);
+  border-color: var(--zs-warn);
+  color: var(--zs-warn);
+}
+
+/* ===================================================================== */
+/* Formularios                                                           */
+/*                                                                       */
+/* Unfold deja los campos a 12px del borde de la tarjeta y las pestanas  */
+/* con 4px de separacion: con dos barras de pestanas seguidas se leen    */
+/* como un bloque unico. Aqui se abre esa caja. Como son utilidades de   */
+/* Tailwind, basta con ganarles en especificidad; no hace falta          */
+/* !important.                                                           */
+/* ===================================================================== */
+
+/* --- Barras de pestanas ---------------------------------------------- */
+
+/* La de arriba (General / inlines) y la de dentro de la tarjeta. */
+#tabs-items,
+[x-data*="activeFieldsetTab"] nav {
+  gap: 6px;
+  padding: 5px;
+}
+
+#tabs-items > a,
+[x-data*="activeFieldsetTab"] nav > a {
+  padding: 7px 14px;
+}
+
+/* Despega la barra interna del borde de la tarjeta. */
+[x-data*="activeFieldsetTab"] > div > nav {
+  margin: 10px;
+}
+
+/* --- Campos ----------------------------------------------------------- */
+
+/* 18px a los lados en vez de 12: dentro de una tarjeta con borde, el
+   texto a 12px se lee pegado. */
+.form-rows .field-line {
+  padding-inline: 18px;
+}
+
+/* Aire arriba y abajo del bloque, no solo entre filas. */
+.form-rows .form-row:first-child .field-line {
+  padding-top: 16px;
+}
+
+.form-rows .form-row.last .field-line {
+  padding-bottom: 16px;
+}
+
+/* La descripcion de un fieldset con pestana se dibuja dentro de la
+   tarjeta, asi que necesita el mismo margen que los campos. */
+.tab-wrapper > fieldset > div:not(.form-rows) {
+  margin-bottom: 6px;
+  padding: 4px 18px 0;
+}
+
+/* --- Tablas de los inlines -------------------------------------------- */
+
+.tabular-table > thead > tr > th:first-child,
+.tabular-table > tbody > tr > td:first-child,
+.tabular-table > tbody > tr > th:first-child {
+  padding-left: 18px;
+}
+
+.tabular-table > thead > tr > th:last-child,
+.tabular-table > tbody > tr > td:last-child,
+.tabular-table > tbody > tr > th:last-child {
+  padding-right: 18px;
+}
+
+/* ===================================================================== */
+/* Plano de sala                                                         */
+/* ===================================================================== */
+
+.zs-chip[data-tone="primary"] {
+  background: var(--zs-accent-wash);
+  color: var(--zs-accent);
+}
+
+.zs-floor {
+  /* Tonos propios del plano: el suelo y las cuatro tintas de zona. */
+  /* Suelo gris muy claro, zonas blancas con filete: sin tintes. */
+  --fl-floor: #fafafa;
+  --fl-dots: rgb(0 0 0 / 7%);
+  --fl-table: #fff;
+  --fl-edge: #d4d4d8;
+  --fl-chair: #d4d4d8;
+  --fl-zone: #fff;
+  --fl-zone-line: #e4e4e7;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dark .zs-floor {
+  --fl-floor: #0c0c0e;
+  --fl-dots: rgb(255 255 255 / 6%);
+  --fl-table: #18181b;
+  --fl-edge: #3f3f46;
+  --fl-chair: #3f3f46;
+  --fl-zone: #131315;
+  --fl-zone-line: #27272a;
+}
+
+/* --- Cabecera -------------------------------------------------------- */
+
+.zs-floor-top {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--zs-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  justify-content: space-between;
+  padding: 4px 0 20px;
+}
+
+.zs-floor-heading h1 {
+  align-items: baseline;
+  color: var(--zs-ink);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 2.2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 4px 14px;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 6px 0 0;
+}
+
+.zs-floor-heading h1 span {
+  color: var(--zs-ink-soft);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.zs-floor-when {
+  align-items: center;
+  color: var(--zs-ok);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 7px;
+  margin: 0;
+}
+
+.zs-floor-when.is-other {
+  color: var(--zs-warn);
+}
+
+.zs-floor-when .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.zs-live {
+  animation: zs-pulse 2s infinite;
+  background: var(--zs-ok);
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+@keyframes zs-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--zs-ok) 55%, transparent); }
+  70% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.zs-floor-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.zs-stat {
+  border-left: 1px solid var(--zs-line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 112px;
+  padding: 2px 22px;
+}
+
+.zs-stat:first-child {
+  border-left: 0;
+}
+
+.zs-stat b {
+  color: var(--zs-ink);
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.zs-stat b small {
+  color: var(--zs-ink-faint);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.zs-stat span {
+  color: var(--zs-ink-soft);
+  font-size: 0.74rem;
+}
+
+.zs-stat.is-bad b {
+  color: var(--zs-bad);
+}
+
+/* --- Barra de tiempo y leyenda --------------------------------------- */
+
+.zs-floor-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.zs-floor-time {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zs-input {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  font-size: 0.85rem;
+  height: 38px;
+  padding: 0 10px;
+}
+
+/* Control segmentado: flechas y fecha/hora en una sola pieza. */
+.zs-seg {
+  align-items: stretch;
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  display: flex;
+  height: 38px;
+  overflow: hidden;
+}
+
+.zs-seg > * + * {
+  border-left: 1px solid var(--zs-line);
+}
+
+.zs-seg a {
+  align-items: center;
+  color: var(--zs-ink-soft);
+  display: flex;
+  justify-content: center;
+  width: 38px;
+}
+
+.zs-seg a:hover {
+  background: var(--zs-surface-2);
+  color: var(--zs-ink);
+}
+
+.zs-seg input {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--zs-line);
+  color: var(--zs-ink);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0 10px;
+}
+
+.zs-seg input:focus {
+  background: var(--zs-accent-wash);
+  outline: none;
+}
+
+.dark .zs-seg input,
+.dark .zs-input {
+  color-scheme: dark;
+}
+
+.zs-floor-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.zs-floor-key {
+  align-items: center;
+  color: var(--zs-ink-soft);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.zs-floor-key b {
+  color: var(--zs-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.zs-floor-key[data-empty="true"] {
+  opacity: 0.45;
+}
+
+.zs-alert--info {
+  background: var(--zs-info-bg);
+  color: var(--zs-info);
+}
+
+.zs-floor-editing {
+  align-items: center;
+  background: var(--zs-accent-wash);
+  border: 1px dashed var(--zs-accent);
+  border-radius: var(--zs-radius);
+  color: var(--zs-accent);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.zs-floor-editing-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.zs-floor-grid {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+}
+
+@media (max-width: 1100px) {
+  .zs-floor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Debajo del plano el panel no se pega al hacer scroll ni reserva hueco
+     cuando no hay mesa elegida. */
+  .zs-floor-panel {
+    position: static;
+  }
+
+  .zs-floor-panel .zs-panel-empty {
+    flex-direction: row;
+    min-height: 0;
+    padding: 16px 18px;
+    text-align: left;
+  }
+
+  .zs-floor-panel .zs-panel-empty .material-symbols-outlined {
+    font-size: 26px;
+  }
+}
+
+/* --- El plano -------------------------------------------------------- */
+
+.zs-plan-card .zs-card-head {
+  align-items: center;
+  border-bottom: 1px solid var(--zs-line-soft);
+  padding-bottom: 12px;
+}
+
+/* En pantallas estrechas el plano no se encoge por debajo de lo legible:
+   se desplaza dentro de su tarjeta, la pagina no. */
+.zs-plan-scroll {
+  overflow-x: auto;
+}
+
+.zs-plan {
+  /* El alto lo calcula la vista para encuadrar las mesas; el ancho es el
+     de la tarjeta. */
+  height: var(--plan-h, 480px);
+  background-color: var(--fl-floor);
+  min-width: 760px;
+  position: relative;
+}
+
+.zs-plan-area {
+  background: var(--fl-zone);
+  border: 1px solid var(--fl-zone-line);
+  border-radius: 14px;
+  position: absolute;
+}
+
+.zs-plan-area-tag {
+  align-items: center;
+  border-radius: 999px;
+  color: var(--zs-ink-faint);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 600;
+  gap: 5px;
+  left: 12px;
+  letter-spacing: 0.04em;
+  padding: 3px 10px 3px 7px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 10px;
+}
+
+.zs-plan-area-tag .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/*
+ * Mesa. El boton es la caja completa (tablero + sillas); el tablero es
+ * .zs-ft-top y las sillas se cuelgan alrededor con posicion absoluta.
+ */
+.zs-ft {
+  --w: 74px;
+  --h: 74px;
+  --edge: var(--fl-edge);
+  --top: var(--fl-table);
+  --ink: var(--zs-ink);
+  --seat: var(--fl-chair);
+  --seat-on: var(--zs-accent);
+
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  height: var(--h);
+  padding: 0;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: transform 0.15s ease;
+  width: var(--w);
+}
+
+.zs-ft[data-shape="round"] {
+  --w: 60px;
+  --h: 60px;
+}
+
+.zs-ft[data-shape="long"] {
+  --w: 132px;
+}
+
+.zs-ft-top {
+  align-items: center;
+  background: var(--top);
+  border: 1.5px solid var(--edge);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  justify-content: center;
+  line-height: 1.1;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.zs-ft[data-shape="round"] .zs-ft-top {
+  border-radius: 50%;
+}
+
+.zs-ft-top b {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.zs-ft-top small {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Tiempo de mesa consumido, como una barra fina al pie del tablero. */
+.zs-ft-progress {
+  background: rgb(255 255 255 / 25%);
+  bottom: 0;
+  height: 4px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.zs-ft-progress::after {
+  background: currentColor;
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: var(--p);
+}
+
+.zs-chair {
+  background: var(--seat);
+  border-radius: 50%;
+  height: 13px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: background 0.2s ease;
+  width: 13px;
+}
+
+.zs-chair.is-taken {
+  background: var(--seat-on);
+}
+
+.zs-ft:hover {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.zs-ft:focus-visible {
+  outline: none;
+}
+
+.zs-ft:focus-visible .zs-ft-top,
+.zs-ft.is-selected .zs-ft-top {
+  box-shadow: 0 0 0 3px var(--fl-floor), 0 0 0 6px var(--zs-accent);
+}
+
+/* Estados: tablero, borde y sillas. Siempre con texto dentro. */
+/* Libre es el estado por defecto: neutro. Solo lo que pide atencion lleva color. */
+.zs-ft[data-state="free"] {
+  --edge: var(--fl-edge);
+}
+
+.zs-ft[data-state="soon"] {
+  --edge: var(--zs-info);
+  --top: var(--zs-info-bg);
+  --ink: var(--zs-info);
+}
+
+.zs-ft[data-state="waiting"] {
+  --edge: var(--zs-warn);
+  --top: var(--zs-warn-bg);
+  --ink: var(--zs-warn);
+  --seat-on: color-mix(in oklab, var(--zs-warn) 55%, var(--fl-chair));
+}
+
+.zs-ft[data-state="late"] {
+  --edge: var(--zs-bad);
+  --top: var(--zs-bad-bg);
+  --ink: var(--zs-bad);
+  --seat-on: color-mix(in oklab, var(--zs-bad) 55%, var(--fl-chair));
+}
+
+.zs-ft[data-state="late"] .zs-ft-top {
+  animation: zs-late 1.6s ease-in-out infinite;
+}
+
+@keyframes zs-late {
+  50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--zs-bad) 20%, transparent); }
+}
+
+.zs-ft[data-state="seated"] {
+  --edge: var(--zs-accent);
+  --top: var(--zs-accent);
+  --ink: var(--zs-on-accent);
+  --seat-on: var(--zs-accent);
+}
+
+.zs-ft[data-state="blocked"] {
+  --ink: var(--zs-ink-soft);
+}
+
+.zs-ft[data-state="blocked"] .zs-ft-top {
+  background: repeating-linear-gradient(
+    -45deg, var(--zs-muted-bg) 0 6px, var(--fl-table) 6px 12px);
+  border-color: var(--zs-ink-faint);
+  border-style: dashed;
+}
+
+/* Muestras de la leyenda: mismas reglas que la mesa, en pequeno. */
+.zs-swatch {
+  border: 2px solid var(--zs-line);
+  border-radius: 4px;
+  display: inline-block;
+  flex: none;
+  height: 12px;
+  width: 12px;
+}
+
+.zs-swatch[data-state="free"] { background: var(--zs-surface); border-color: var(--fl-edge, var(--zs-line)); }
+.zs-swatch[data-state="soon"] { background: var(--zs-info-bg); border-color: var(--zs-info); }
+.zs-swatch[data-state="waiting"] { background: var(--zs-warn-bg); border-color: var(--zs-warn); }
+.zs-swatch[data-state="late"] { background: var(--zs-bad-bg); border-color: var(--zs-bad); }
+.zs-swatch[data-state="seated"] { background: var(--zs-accent); border-color: var(--zs-accent); }
+.zs-swatch[data-state="blocked"] {
+  background: repeating-linear-gradient(-45deg, var(--zs-muted-bg) 0 3px, var(--zs-surface) 3px 6px);
+  border-color: var(--zs-ink-faint);
+  border-style: dashed;
+}
+
+/* Modo edicion */
+/* Solo editando hay rejilla: ayuda a alinear las mesas. */
+.zs-plan.is-editing {
+  aspect-ratio: 16 / 9;
+  background-image: radial-gradient(var(--fl-dots) 1.2px, transparent 1.2px);
+  background-size: 12px 12px;
+  height: auto;
+}
+
+/* Las mesas se colocan en % de este area; el margen alrededor es fijo en px
+   (PLAN_INSET en wapp/floor.py) para que quepan sillas y etiquetas. */
+.zs-plan-inner {
+  inset: 104px 112px 76px;
+  position: absolute;
+}
+
+/* Editando, el area es el lienzo completo: ahi viven las coordenadas. */
+.zs-plan.is-editing .zs-plan-inner {
+  inset: 48px;
+  outline: 1.5px dashed var(--zs-line);
+  outline-offset: 30px;
+  border-radius: 4px;
+}
+
+.zs-plan.is-editing .zs-ft {
+  cursor: grab;
+  touch-action: none;
+}
+
+.zs-plan.is-editing .zs-ft-top {
+  animation: none;
+  border-style: dashed;
+}
+
+.zs-plan.is-editing .zs-ft.is-dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.1);
+  transition: none;
+  z-index: 5;
+}
+
+/* --- Panel lateral --------------------------------------------------- */
+
+.zs-floor-panel {
+  position: sticky;
+  top: 76px;
+}
+
+.zs-panel-empty {
+  min-height: 300px;
+  justify-content: center;
+}
+
+.zs-panel-empty b {
+  color: var(--zs-ink);
+  font-size: 0.95rem;
+}
+
+.zs-panel-empty .material-symbols-outlined {
+  font-size: 36px;
+}
+
+.zs-panel-head {
+  align-items: center;
+  border-bottom: 1px solid var(--zs-line-soft);
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.zs-panel-code {
+  color: var(--zs-ink);
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.zs-panel-sub {
+  color: var(--zs-ink-soft);
+  font-size: 0.78rem;
+}
+
+
+.zs-panel-sec {
+  border-top: 1px solid var(--zs-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 18px;
+}
+
+.zs-panel-head + .zs-panel-sec {
+  border-top: 0;
+  padding-bottom: 4px;
+}
+
+.zs-panel-label {
+  color: var(--zs-ink-faint);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.zs-panel-text {
+  color: var(--zs-ink-soft);
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.zs-panel-text b {
+  color: var(--zs-ink);
+}
+
+.zs-panel-who {
+  display: flex;
+  flex-direction: column;
+}
+
+.zs-panel-who b {
+  color: var(--zs-ink);
+  font-size: 1rem;
+}
+
+.zs-panel-who span {
+  color: var(--zs-ink-soft);
+  font-size: 0.8rem;
+}
+
+.zs-panel-who:hover b {
+  text-decoration: underline;
+}
+
+.zs-panel-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zs-panel-meter span {
+  color: var(--zs-ink-soft);
+  font-size: 0.78rem;
+}
+
+.zs-panel-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.zs-panel-facts li {
+  align-items: flex-start;
+  color: var(--zs-ink-soft);
+  display: flex;
+  font-size: 0.82rem;
+  gap: 8px;
+}
+
+.zs-panel-facts li.is-bad {
+  color: var(--zs-bad);
+  font-weight: 600;
+}
+
+.zs-panel-facts .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.zs-panel-facts a {
+  color: var(--zs-ink);
+}
+
+.zs-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zs-panel-actions .zs-step,
+.zs-panel-actions .zs-btn {
+  height: 36px;
+}
+
+.zs-panel-actions .zs-step {
+  background: var(--zs-accent);
+  border-color: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-panel-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.zs-panel-day li {
+  align-items: center;
+  border-radius: calc(var(--zs-radius) - 2px);
+  display: grid;
+  font-size: 0.82rem;
+  gap: 8px;
+  grid-template-columns: 10px 84px minmax(0, 1fr);
+  padding: 5px 8px;
+}
+
+.zs-panel-day li.is-current {
+  background: var(--zs-accent-wash);
+}
+
+.zs-panel-day-time {
+  color: var(--zs-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.zs-panel-day a,
+.zs-panel-day li > span:not(.zs-panel-day-time) {
+  color: var(--zs-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===================================================================== */
+/* Ocupacion por horas                                                   */
+/* ===================================================================== */
+
+.zs-tl-card .zs-card-head {
+  border-bottom: 1px solid var(--zs-line-soft);
+}
+
+.zs-tl-scroll {
+  overflow-x: auto;
+}
+
+.zs-tl {
+  --label: 118px;
+  --zs-tl-grid: var(--color-base-100);
+  min-width: 820px;
+  padding: 0 30px 8px 0;
+  position: relative;
+}
+
+.zs-tl-row {
+  display: grid;
+  grid-template-columns: var(--label) minmax(0, 1fr);
+  min-height: 40px;
+}
+
+.zs-tl-row.is-selected .zs-tl-label {
+  background: var(--zs-accent-wash);
+  box-shadow: inset 3px 0 0 var(--zs-accent);
+}
+
+.zs-tl-label {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--zs-ink);
+  display: flex;
+  font-size: 0.82rem;
+  gap: 7px;
+  padding: 0 12px 0 18px;
+  text-align: left;
+}
+
+button.zs-tl-label {
+  cursor: pointer;
+}
+
+button.zs-tl-label:hover {
+  background: var(--zs-surface-2);
+}
+
+.zs-tl-label small {
+  color: var(--zs-ink-faint);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pista: rejilla de horas de fondo; los marcadores van en ::before/::after. */
+.zs-tl-track {
+  background-image: linear-gradient(to right, var(--zs-tl-grid) 1px, transparent 1px);
+  background-size: var(--hour) 100%;
+  border-bottom: 1px solid var(--zs-tl-grid);
+  cursor: crosshair;
+  position: relative;
+}
+
+/* Hora que se esta viendo en el plano. */
+.zs-tl[data-at="1"] .zs-tl-track::after {
+  background: var(--zs-bad);
+  opacity: 0.7;
+  bottom: -1px;
+  content: "";
+  left: var(--at);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 1.5px;
+  z-index: 3;
+}
+
+/* Hora real, cuando se esta mirando otra. */
+.zs-tl[data-now="1"] .zs-tl-track::before {
+  border-left: 2px dotted var(--zs-ok);
+  bottom: -1px;
+  content: "";
+  left: var(--now);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 3;
+}
+
+.zs-tl-row--head {
+  min-height: 34px;
+}
+
+.zs-tl-ruler {
+  background-image: none;
+  border-bottom-color: var(--zs-line);
+  cursor: default;
+}
+
+.zs-tl-ruler > span {
+  bottom: 8px;
+  color: var(--zs-ink-soft);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.zs-tl-ruler > span small {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.zs-tl-hover-tag {
+  background: var(--zs-ink) !important;
+  border-radius: 6px;
+  color: var(--zs-surface) !important;
+  padding: 2px 6px;
+  z-index: 5;
+}
+
+.zs-tl-hover {
+  border-left: 1px dashed var(--zs-ink-soft);
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 2;
+}
+
+/* Tira de mesas ocupadas cada media hora. */
+.zs-tl-row--heat {
+  min-height: 64px;
+}
+
+.zs-tl-row--heat .zs-tl-label {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0;
+  justify-content: center;
+}
+
+.zs-tl-heat {
+  align-items: flex-end;
+  background-image: none;
+  cursor: default;
+  display: flex;
+  gap: 3px;
+  height: 64px;
+}
+
+/* Cada franja: el numero encima de su barra. */
+.zs-tl-slot {
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.zs-tl-slot i {
+  background: var(--color-base-300);
+  border-radius: 4px 4px 0 0;
+  display: block;
+  transition: background 0.15s ease;
+}
+
+.dark .zs-tl {
+  --zs-tl-grid: var(--color-base-800);
+}
+
+.dark .zs-tl-slot i {
+  background: var(--color-base-700);
+}
+
+.zs-tl-slot:hover i,
+.zs-tl-slot.is-at i {
+  background: var(--zs-accent);
+}
+
+.zs-tl-slot em {
+  color: var(--zs-ink-soft);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  padding-bottom: 3px;
+  text-align: center;
+}
+
+.zs-tl-slot:hover em,
+.zs-tl-slot.is-at em {
+  color: var(--zs-accent);
+}
+
+/* Separador de zona. */
+.zs-tl-row--area {
+  min-height: 30px;
+}
+
+.zs-tl-row--area .zs-tl-label {
+  color: var(--zs-ink-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+  gap: 5px;
+  letter-spacing: 0.06em;
+  padding-top: 8px;
+  text-transform: uppercase;
+}
+
+.zs-tl-row--area .zs-tl-label .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.zs-tl-row--area .zs-tl-track {
+  cursor: default;
+}
+
+/* Barras de reserva. */
+.zs-tl-bar {
+  --bar: var(--zs-info);
+  --bar-bg: var(--zs-info-bg);
+
+  align-items: center;
+  background: var(--bar-bg);
+  border-left: 3px solid var(--bar);
+  border-radius: 6px;
+  bottom: 5px;
+  color: var(--bar);
+  display: flex;
+  font-size: 0.74rem;
+  gap: 5px;
+  overflow: hidden;
+  padding: 0 7px;
+  position: absolute;
+  top: 5px;
+  transition: filter 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.zs-tl-bar b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zs-tl-bar span {
+  flex: none;
+  opacity: 0.8;
+}
+
+.zs-tl-bar[href]:hover {
+  filter: brightness(0.96) saturate(1.2);
+  transform: translateY(-1px);
+  z-index: 4;
+}
+
+.zs-tl-bar.is-current {
+  box-shadow: 0 0 0 2px var(--zs-surface), 0 0 0 3px var(--bar);
+}
+
+.zs-tl-bar[data-tone="seated"] { --bar: var(--zs-on-accent); --bar-bg: var(--zs-accent); border-left-color: var(--zs-accent); }
+.zs-tl-bar[data-tone="booked"] { --bar: var(--zs-info); --bar-bg: var(--zs-info-bg); }
+.zs-tl-bar[data-tone="pending"] { --bar: var(--zs-warn); --bar-bg: var(--zs-warn-bg); }
+.zs-tl-bar[data-tone="late"] { --bar: var(--zs-bad); --bar-bg: var(--zs-bad-bg); }
+.zs-tl-bar[data-tone="done"] { --bar: var(--zs-muted); --bar-bg: var(--zs-muted-bg); }
+.zs-tl-bar[data-tone="blocked"] {
+  --bar: var(--zs-ink-soft);
+  background: repeating-linear-gradient(-45deg, var(--zs-muted-bg) 0 5px, var(--zs-surface) 5px 10px);
+}
+
+/* Puntos de leyenda (pie de la linea de tiempo y agenda del panel). */
+.zs-tl-dot {
+  border-radius: 3px;
+  display: inline-block;
+  flex: none;
+  height: 10px;
+  width: 10px;
+}
+
+.zs-tl-dot[data-tone="seated"] { background: var(--zs-accent); }
+.zs-tl-dot[data-tone="booked"] { background: var(--zs-info); }
+.zs-tl-dot[data-tone="pending"] { background: var(--zs-warn); }
+.zs-tl-dot[data-tone="late"] { background: var(--zs-bad); }
+.zs-tl-dot[data-tone="done"] { background: var(--zs-ink-faint); }
+.zs-tl-dot[data-tone="blocked"] {
+  background: repeating-linear-gradient(-45deg, var(--zs-ink-faint) 0 2px, transparent 2px 4px);
+}
+
+.zs-tl-foot {
+  align-items: center;
+  border-top: 1px solid var(--zs-line-soft);
+  color: var(--zs-ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  gap: 8px 16px;
+  padding: 11px 18px 13px;
+}
+
+.zs-tl-foot > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.zs-tl-foot-hint {
+  color: var(--zs-ink-faint);
+  margin-left: auto;
+}
+
+.zs-tl-marker-sample {
+  background: var(--zs-bad);
+  display: inline-block;
+  height: 12px;
+  width: 2px;
+}
+
+:where(.zs-floor) a {
+  text-decoration: none;
+}
+
+.zs-floor :focus-visible {
+  outline: 2px solid var(--zs-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .zs-floor-top {
+    padding: 16px;
+  }
+
+  .zs-floor-heading h1 {
+    font-size: 1.8rem;
+  }
+
+  .zs-stat {
+    flex: 1 1 40%;
+    min-width: 0;
+  }
+
+  .zs-tl-foot-hint {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zs-ft[data-state="late"] .zs-ft-top,
+  .zs-live {
+    animation: none;
+  }
+}
+
+/* En la tira de ocupacion la franja actual ya va resaltada: la linea de la
+   hora solo taparia su numero. */
+.zs-tl[data-at] .zs-tl-heat::after,
+.zs-tl[data-now] .zs-tl-heat::before {
+  display: none;
+}
+
+/* ===================================================================== */
+/* Logo                                                                  */
+/* ===================================================================== */
+
+/* El logo es negro sobre transparente: en oscuro se invierte a blanco. */
+.dark img[src*="zisa-logo"] {
+  filter: invert(1);
+}
+
+#nav-sidebar img[src*="zisa-logo"] {
+  height: 38px;
+  width: auto;
+}
+
+/* ===================================================================== */
+/* Login (templates/unfold/layouts/unauthenticated.html)                 */
+/* ===================================================================== */
+
+/* Alto fijo al de la pantalla (dvh descuenta las barras del navegador en
+   movil). Si el formulario no cabe, se desplaza solo su columna: la pagina
+   y la foto nunca pasan del borde inferior. */
+.zs-login {
+  background: var(--zs-surface);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.zs-login--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.zs-login-main {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 64px 24px 48px;
+  position: relative;
+}
+
+/* "safe": si no cabe, se alinea arriba en vez de cortarse por los dos lados. */
+@supports (justify-content: safe center) {
+  .zs-login-main {
+    justify-content: safe center;
+  }
+}
+
+/* Pantallas bajas (portatil con zoom, tablet apaisada): todo mas compacto. */
+@media (max-height: 700px) {
+  .zs-login-main {
+    padding: 52px 24px 36px;
+  }
+
+  .zs-login-logo {
+    height: 46px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .zs-login-title {
+    margin-bottom: 18px !important;
+  }
+
+  .zs-login-foot {
+    display: none;
+  }
+}
+
+.zs-login-box {
+  max-width: 360px;
+  width: 100%;
+}
+
+.zs-login-foot {
+  bottom: 22px;
+  color: var(--zs-ink-faint);
+  font-size: 0.75rem;
+  margin: 0;
+  position: absolute;
+}
+
+/* Foto: separada del borde y con esquinas, oscurecida abajo para el pie. */
+.zs-login-photo {
+  background-color: var(--zs-surface-2);
+  background-position: center;
+  background-size: cover;
+  border-radius: 20px;
+  margin: 14px;
+  overflow: hidden;
+  position: relative;
+}
+
+.zs-login-photo::after {
+  background: linear-gradient(to top, rgb(0 0 0 / 62%), rgb(0 0 0 / 0%) 48%);
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.zs-login-caption {
+  bottom: 34px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  left: 36px;
+  position: absolute;
+  right: 36px;
+  z-index: 1;
+}
+
+.zs-login-caption b {
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.zs-login-caption span {
+  font-size: 0.92rem;
+  opacity: 0.85;
+}
+
+@media (max-width: 1024px) {
+  .zs-login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zs-login-photo {
+    display: none;
+  }
+}
+
+/* Logo y saludo sobre el formulario. */
+.zs-login-logo {
+  display: block;
+  height: 64px;
+  margin: 0 0 26px;
+  width: auto;
+}
+
+.zs-login-title {
+  margin-bottom: 26px;
+}
+
+.zs-login-title h1 {
+  color: var(--zs-ink);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.zs-login-title p {
+  color: var(--zs-ink-soft);
+  font-size: 0.9rem;
+  margin: 6px 0 0;
+}
+
+/* ===================================================================== */
+/* Plano: controles de fecha/hora, resumen del panel, linea vacia        */
+/* ===================================================================== */
+
+/* Fecha y hora dentro del control segmentado. */
+.zs-seg-field {
+  align-items: center;
+  border-left: 1px solid var(--zs-line);
+  color: var(--zs-ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  gap: 7px;
+  padding: 0 12px;
+  position: relative;
+}
+
+.zs-seg-field:hover {
+  background: var(--zs-surface-2);
+}
+
+.zs-seg-field .material-symbols-outlined {
+  color: var(--zs-ink-faint);
+  font-size: 17px;
+}
+
+/* El campo de fecha real, invisible encima del texto en espanol. */
+.zs-seg-field input[type="date"] {
+  cursor: pointer;
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.zs-seg .zs-seg-field input {
+  border: 0;
+  padding: 0;
+}
+
+.zs-seg-field select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.zs-seg-field select:focus {
+  outline: none;
+}
+
+.zs-seg-field:focus-within {
+  background: var(--zs-accent-wash);
+}
+
+/* Resumen del panel cuando no hay mesa elegida. */
+.zs-overview .zs-panel-sec:first-child {
+  padding-top: 16px;
+}
+
+.zs-ov-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  margin: 0 -8px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.zs-ov-row:hover {
+  background: var(--zs-surface-2);
+}
+
+.zs-ov-time {
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zs-ov-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zs-ov-who b {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-ov-who small {
+  color: var(--zs-ink-faint);
+  font-size: 0.74rem;
+}
+
+.zs-ov-when {
+  color: var(--zs-ink-soft);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.zs-ov-row.is-late .zs-ov-when,
+.zs-ov-row.is-late .zs-ov-time {
+  color: var(--zs-bad);
+  font-weight: 600;
+}
+
+.zs-ov-hint {
+  align-items: center;
+  border-top: 1px solid var(--zs-line-soft);
+  color: var(--zs-ink-faint);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 18px;
+}
+
+.zs-ov-hint .material-symbols-outlined {
+  font-size: 17px;
+}
+
+/* Linea de tiempo sin reservas. */
+.zs-tl-empty {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  padding: 22px 18px;
+}
+
+.zs-tl-empty > .material-symbols-outlined {
+  color: var(--zs-ink-faint);
+  font-size: 26px;
+}
+
+.zs-tl-empty div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.zs-tl-empty b {
+  color: var(--zs-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.zs-tl-empty span {
+  color: var(--zs-ink-soft);
+  font-size: 0.8rem;
+}
+
+/* ===================================================================== */
+/* Panel de inicio: resumen de manana, semana y mes                      */
+/* ===================================================================== */
+
+.zs-sum {
+  align-items: stretch;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1200px) {
+  .zs-sum {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.zs-sum-card .zs-card-head {
+  align-items: center;
+}
+
+/* Tres cifras en fila, separadas por filete. */
+.zs-sum-figs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 2px 18px 14px;
+}
+
+.zs-sum-figs > div {
+  border-left: 1px solid var(--zs-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 14px;
+}
+
+.zs-sum-figs > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.zs-sum-figs b {
+  color: var(--zs-ink);
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.zs-sum-figs span {
+  color: var(--zs-ink-faint);
+  font-size: 0.74rem;
+}
+
+.zs-sum-figs .is-warn b {
+  color: var(--zs-warn);
+}
+
+.zs-delta[data-sign="up"] { color: var(--zs-ok) !important; }
+.zs-delta[data-sign="down"] { color: var(--zs-bad) !important; }
+
+/* Lista de manana */
+.zs-sum-list {
+  border-top: 1px solid var(--zs-line-soft);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 6px 8px;
+}
+
+.zs-sum-row {
+  align-items: center;
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
+.zs-sum-row:hover {
+  background: var(--zs-surface-2);
+}
+
+.zs-sum-time {
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zs-sum-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zs-sum-who b {
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zs-sum-who small {
+  color: var(--zs-ink-faint);
+  font-size: 0.73rem;
+}
+
+.zs-sum-empty {
+  color: var(--zs-ink-faint);
+  font-size: 0.84rem;
+  margin: auto 0;
+  padding: 18px 10px;
+  text-align: center;
+}
+
+/* Barras de la semana: pasado gris, hoy tinta, lo que falta en contorno. */
+.zs-week {
+  align-items: stretch;
+  border-top: 1px solid var(--zs-line-soft);
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-height: 170px;
+  padding: 14px 18px 10px;
+}
+
+.zs-week-day {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.zs-week-day em {
+  color: var(--zs-ink-soft);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-height: 1em;
+}
+
+.zs-week-day i {
+  background: var(--color-base-300);
+  border-radius: 5px 5px 2px 2px;
+  display: block;
+  max-height: 110px;
+  min-height: 3px;
+  width: 100%;
+}
+
+.dark .zs-week-day i {
+  background: var(--color-base-700);
+}
+
+.zs-week-day.is-today i {
+  background: var(--zs-accent);
+}
+
+.zs-week-day.is-future i {
+  background: transparent;
+  border: 1.5px dashed var(--color-base-400);
+}
+
+.zs-week-day span {
+  color: var(--zs-ink-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.zs-week-day.is-today span {
+  color: var(--zs-ink);
+}
+
+.zs-sum-foot {
+  color: var(--zs-ink-faint);
+  font-size: 0.74rem;
+  margin: 0;
+  padding: 0 18px 14px;
+}
+
+/* Datos del mes */
+.zs-sum-stats {
+  border-top: 1px solid var(--zs-line-soft);
+  flex: 1;
+  margin: 0;
+  padding: 4px 18px;
+}
+
+.zs-sum-stats > div {
+  align-items: baseline;
+  border-bottom: 1px solid var(--zs-line-soft);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.zs-sum-stats > div:last-child {
+  border-bottom: 0;
+}
+
+.zs-sum-stats dt {
+  color: var(--zs-ink-soft);
+  font-size: 0.82rem;
+}
+
+.zs-sum-stats dd {
+  color: var(--zs-ink);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin: 0;
+}
+
+.zs-sum-stats dd small {
+  color: var(--zs-ink-faint);
+  font-weight: 400;
+}
+
+.zs-sum-stats dd.is-bad {
+  color: var(--zs-bad);
+}
+
+/* ===================================================================== */
+/* Plano: sentar sin reserva (walk-in)                                   */
+/* ===================================================================== */
+
+.zs-walkin {
+  border-top: 1px solid var(--zs-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+.zs-walkin-title {
+  color: var(--zs-ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.zs-walkin-party {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.zs-walkin-party button {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  cursor: pointer;
+  font-size: 1.1rem;
+  height: 38px;
+  width: 38px;
+}
+
+.zs-walkin-party button:hover {
+  background: var(--zs-surface-2);
+}
+
+.zs-walkin-party input {
+  background: var(--zs-surface);
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  color: var(--zs-ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  height: 38px;
+  text-align: center;
+  width: 56px;
+  -moz-appearance: textfield;
+}
+
+.zs-walkin-party input::-webkit-inner-spin-button,
+.zs-walkin-party input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.zs-walkin-party span {
+  color: var(--zs-ink-soft);
+  font-size: 0.82rem;
+  margin-left: 2px;
+}
+
+.zs-walkin .zs-input {
+  width: 100%;
+}
+
+.zs-walkin .zs-btn {
+  height: 40px;
+  justify-content: center;
+}
+
+.zs-walkin-note {
+  color: var(--zs-warn);
+  font-size: 0.76rem;
+  margin: 0;
+}
