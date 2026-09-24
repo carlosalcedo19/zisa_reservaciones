@@ -82,6 +82,10 @@ def _read(request):
         except ValueError:
             return None
         return data if isinstance(data, dict) else None
+    # El plugin de WordPress repite los campos en la URL: desde el hosting de
+    # zisa.pe el cuerpo llega vacio al pasar por Cloudflare, la URL no.
+    if not request.POST and request.GET:
+        return request.GET
     return request.POST
 
 

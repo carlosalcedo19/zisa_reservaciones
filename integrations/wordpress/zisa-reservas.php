@@ -76,7 +76,12 @@ function zisa_reservas_enviar($contact_form, &$abort, $submission = null)
     // JSON: no depende de wp_json_encode y Django lo lee igual.
     $cuerpo_envio = http_build_query($campos, '', '&');
 
-    $respuesta = wp_remote_post(ZISA_RESERVAS_URL, array(
+    // Los campos van también en la URL. Desde este hosting algo en el camino
+    // hacia Cloudflare vacía el cuerpo y las cabeceras (salvo Authorization);
+    // la URL siempre llega entera. Django usa la URL si el cuerpo llega vacío.
+    $url = ZISA_RESERVAS_URL . (strpos(ZISA_RESERVAS_URL, '?') === false ? '?' : '&') . $cuerpo_envio;
+
+    $respuesta = wp_remote_post($url, array(
         'timeout' => 12,
         'headers' => array(
             'Authorization' => 'Bearer ' . ZISA_RESERVAS_TOKEN,
@@ -109,6 +114,18 @@ function zisa_reservas_enviar($contact_form, &$abort, $submission = null)
     // 401, 5xx...: fallo nuestro, no del cliente. Sigue como siempre.
     error_log('[zisa-reservas] Respuesta ' . $codigo . ': ' . wp_remote_retrieve_body($respuesta));
 }
+
+/**
+ * Solo para las llamadas al sistema: salir por IPv4. Desde el hosting, por
+ * IPv6 y con su cURL 7.61, el cuerpo de la petición llegaba vacío al pasar
+ * por Cloudflare (delante de Render); la misma petición por IPv4, desde otra
+ * red, llegaba completa.
+ */
+add_action('http_api_curl', function ($handle, $args, $url) {
+    if (defined('ZISA_RESERVAS_URL') && strpos($url, ZISA_RESERVAS_URL) === 0) {
+        curl_setopt($handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    }
+}, 10, 3);
 
 /** En el éxito, el mensaje del formulario muestra el código de la reserva. */
 add_filter('wpcf7_feedback_response', function ($respuesta, $resultado) {

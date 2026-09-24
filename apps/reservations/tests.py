@@ -314,6 +314,25 @@ class ReservaWebTests(BaseSalaTestCase):
         self.assertNotEqual(reserva.table_codes, "sin asignar")
         self.assertIn(cuerpo["code"], cuerpo["message"])
 
+    def test_cuerpo_vacio_usa_los_campos_de_la_url(self):
+        # Asi llega desde el hosting de zisa.pe: cuerpo vacio, datos en la URL.
+        from urllib.parse import urlencode
+
+        from django.test import override_settings
+
+        datos = {
+            "full-name": "Lucia Paredes", "your-phone": "987 111 222",
+            "num-person": "2", "date-reservation": self.cena().date().isoformat(),
+            "time-field": "08:00 PM", "indications": "",
+        }
+        with override_settings(WEB_RESERVATION_TOKEN=self.TOKEN):
+            r = self.client.generic(
+                "POST", f"/api/reservas/web/?{urlencode(datos)}", b"",
+                content_type="text/plain", HTTP_AUTHORIZATION=f"Bearer {self.TOKEN}",
+            )
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Reservation.objects.get().guest.name, "Lucia Paredes")
+
     def test_sin_clave_o_con_otra_no_entra(self):
         self.assertEqual(self.post(token=None).status_code, 401)
         self.assertEqual(self.post(token="otra").status_code, 401)
