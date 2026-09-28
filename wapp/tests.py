@@ -520,3 +520,16 @@ class PanelVacioTests(TestCase):
         self.assertEqual(ctx[NOW_KPIS][2]["hint"], "nadie con retraso")
         self.assertIsNone(ctx[SUMMARY]["week"]["change"])
         self.assertEqual(ctx[SUMMARY][MONTH]["avg_party"], 0)
+
+
+class UsuariosTests(TestCase):
+    def test_el_admin_crea_un_usuario_desde_el_panel(self):
+        admin_user = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
+        self.client.force_login(admin_user)
+        clave = secrets.token_urlsafe()
+        response = self.client.post(reverse("admin:auth_user_add"), {
+            "username": "anfitriona", "usable_password": "true",
+            "password1": clave, "password2": clave,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.get(username="anfitriona").check_password(clave))
