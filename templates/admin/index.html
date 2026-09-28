@@ -1,16 +1,7 @@
 {% extends 'admin/base.html' %}
 {% load i18n %}
 
-{% comment %}
-Panel de inicio. Los datos llegan de wapp.dashboard.dashboard_callback.
-
-Estructura: una banda de cifras a todo el ancho y tres filas de dos tarjetas.
-Las filas estiran (align-items: stretch) y cada tarjeta reparte su alto por
-dentro, asi que las dos columnas terminan a la misma altura y no quedan
-huecos entre bloques.
-
-Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
-{% endcomment %}
+{# Datos: wapp.dashboard.dashboard_callback. #}
 
 {% block title %}Panel de inicio | {{ site_title }}{% endblock %}
 
@@ -32,8 +23,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
     </div>
 {% else %}
 
-    {# Sin portada: el panel abre directo con las cifras. La proxima llegada #}
-    {# esta en su tarjeta y los accesos, en el menu lateral y la cabecera.  #}
     {% if overdue_count %}
         <div class="zs-alert">
             <span class="material-symbols-outlined">error</span>
@@ -46,7 +35,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         </div>
     {% endif %}
 
-    {# Banda de cifras: las seis en una sola fila a todo el ancho ---------- #}
     <h2 class="zs-section">
         <span class="material-symbols-outlined">today</span> El servicio de hoy
     </h2>
@@ -70,7 +58,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         {% endfor %}
     </div>
 
-    {# Fila 1: quien llega y donde se sienta ------------------------------ #}
     <div class="zs-grid">
         <div class="zs-card">
             <div class="zs-card-head">
@@ -79,8 +66,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
             </div>
             <div class="zs-card-body zs-card-body--flush">
                 {% for r in upcoming %}
-                    {# Toda la fila abre la ficha (el enlace se estira con ::after);   #}
-                    {# el boton del siguiente paso queda por encima y actua sin abrirla. #}
+                    {# La fila entera abre la ficha (::after); el boton del siguiente paso queda por encima. #}
                     <div class="zs-row{% if r.is_overdue %} zs-row--late{% endif %}">
                         <span class="zs-row-time">{{ r.local_time|time:"H:i" }}</span>
                         <span class="zs-row-who">
@@ -141,7 +127,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         </div>
     </div>
 
-    {# Fila 2: como se reparte la carga del dia --------------------------- #}
     <div class="zs-grid">
         <div class="zs-card">
             <div class="zs-card-head">
@@ -187,14 +172,11 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         </div>
     </div>
 
-    {# Resumen: lo que viene y como va el periodo ------------------------ #}
-    {# Hoy ya esta arriba, en las cifras del servicio; aqui va lo demas.   #}
     <h2 class="zs-section">
         <span class="material-symbols-outlined">insights</span> Resumen
     </h2>
 
     <div class="zs-sum">
-        {# Manana #}
         {% with t=summary.tomorrow %}
         <div class="zs-card zs-sum-card">
             <div class="zs-card-head">
@@ -225,7 +207,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         </div>
         {% endwith %}
 
-        {# Semana #}
         {% with w=summary.week %}
         <div class="zs-card zs-sum-card">
             <div class="zs-card-head">
@@ -242,7 +223,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
                     <span>vs. semana pasada</span>
                 </div>
             </div>
-            <div class="zs-week" role="img" aria-label="Personas por día de esta semana">
+            <figure class="zs-week" aria-label="Personas por día de esta semana" style="margin:0">
                 {% for d in w.days %}
                     <div class="zs-week-day{% if d.is_today %} is-today{% elif d.is_future %} is-future{% endif %}"
                          title="{{ d.letter }} {{ d.number }} · {{ d.people }} personas{% if d.is_future %} reservadas{% endif %}">
@@ -251,7 +232,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
                         <span>{{ d.letter }}</span>
                     </div>
                 {% endfor %}
-            </div>
+            </figure>
             <p class="zs-sum-foot">
                 {{ w.no_shows }} no-show{{ w.no_shows|pluralize:"s" }} · {{ w.cancelled }} cancelada{{ w.cancelled|pluralize:"s" }}
                 · los días que faltan cuentan lo ya reservado
@@ -259,7 +240,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         </div>
         {% endwith %}
 
-        {# Mes #}
         {% with m=summary.month %}
         <div class="zs-card zs-sum-card">
             <div class="zs-card-head">
@@ -287,7 +267,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         {% endwith %}
     </div>
 
-    {# Tendencias: ultimos 7 y 30 dias ------------------------------------ #}
     <h2 class="zs-section">
         <span class="material-symbols-outlined">trending_up</span> Tendencias
     </h2>
@@ -337,8 +316,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
 
     <script>
     (function () {
-        // Chart.js lo carga Unfold en el esqueleto; si algun dia lo quita,
-        // el panel se queda sin graficos pero no se rompe.
+        // Chart.js lo carga Unfold; si deja de hacerlo, el panel queda sin graficos pero no se rompe.
         if (typeof Chart === "undefined") { return; }
 
         var raiz = getComputedStyle(document.documentElement);
@@ -410,7 +388,6 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
                     labels: datos("zs-history-labels"),
                     datasets: [{
                         data: valores,
-                        // El ultimo dia es hoy: se destaca y el resto queda lavado.
                         backgroundColor: valores.map(function (_, i) {
                             return i === valores.length - 1 ? acento : suave;
                         }),
@@ -470,9 +447,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
         }
     })();
 
-    // El panel se deja abierto en la tablet del anfitrion: se recarga solo
-    // cada dos minutos, pero nunca mientras la pestana esta oculta ni si hay
-    // un menu abierto o el foco en un campo.
+    // Queda abierto en la tablet del anfitrion: recarga sin interrumpir a quien lo esta usando.
     (function () {
         var CADA = 120000;
         setInterval(function () {
@@ -480,7 +455,7 @@ Los graficos usan el Chart.js que Unfold ya carga en todas las paginas.
             var activo = document.activeElement;
             if (activo && /INPUT|TEXTAREA|SELECT/.test(activo.tagName)) { return; }
             if (document.querySelector(".zs-user-menu:not([style*='none'])")) { return; }
-            window.location.reload();
+            globalThis.location.reload();
         }, CADA);
     })();
     </script>

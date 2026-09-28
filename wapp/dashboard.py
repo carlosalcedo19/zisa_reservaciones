@@ -1,14 +1,4 @@
-"""
-Datos del panel de inicio.
-
-Unfold llama a `dashboard_callback` al renderizar /admin/ y le pasa el
-contexto de la plantilla. Todo lo que devuelve aqui lo dibuja
-templates/admin/index.html.
-
-Las consultas estan acotadas al servicio del dia, la semana y el mes (con
-el mes anterior para comparar): la portada del panel tiene que abrir rapido
-aunque la tabla de reservas crezca.
-"""
+"""Datos del panel de inicio (Unfold -> dashboard_callback -> templates/admin/index.html)."""
 
 from datetime import datetime, timedelta
 
@@ -37,17 +27,11 @@ STATUS_TONE = {
 DAY_NAMES = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 
 
-# ---------------------------------------------------------------------------
-# Resumen: manana, esta semana y este mes
-# ---------------------------------------------------------------------------
-
-#: Estados que cuentan como reserva "en firme" (lo cancelado y la lista de
-#: espera no ocupan sala).
+#: Reservas "en firme": lo cancelado y la lista de espera no ocupan sala.
 BOOKED = (
     Reservation.Status.PENDING, Reservation.Status.CONFIRMED, Reservation.Status.SEATED,
     Reservation.Status.FINISHED, Reservation.Status.NO_SHOW,
 )
-#: De esas, las que traen gente (el no-show reservo pero no vino).
 CAME = (
     Reservation.Status.PENDING, Reservation.Status.CONFIRMED, Reservation.Status.SEATED,
     Reservation.Status.FINISHED,
@@ -58,62 +42,57 @@ DAY_LETTERS = ["L", "M", "X", "J", "V", "S", "D"]
 
 
 def _pct_change(now, before):
-    """Variacion en % frente al periodo anterior, o None si no hay con que comparar."""
     if not before:
         return None
     return round((now - before) / before * 100)
 
 
-def _summary(venue, today, list_url):
-    """
-    Cifras de manana, la semana (lun-dom) y el mes en curso.
-
-    Todo sale de una sola consulta agrupada por dia y estado, desde el
-    primer dia del mes anterior (para comparar) hasta el final de la semana
-    o de manana, lo que llegue mas lejos.
-    """
-    tomorrow = today + timedelta(days=1)
-    week_start = today - timedelta(days=today.weekday())
-    week_end = week_start + timedelta(days=6)
-    month_start = today.replace(day=1)
-    next_month = (month_start + timedelta(days=32)).replace(day=1)
-    month_end = next_month - timedelta(days=1)
-    prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
-
+def _counts_by_day(venue, start, end):
+    """dia -> estado -> (reservas, personas)."""
     rows = (
         Reservation.objects.filter(
             venue=venue,
-            service_date__gte=min(prev_month_start, week_start - timedelta(days=7)),
-            service_date__lte=max(month_end, week_end, tomorrow),
+            service_date__gte=start,
+            service_date__lte=end,
         )
         .values("service_date", "status")
         .annotate(n=Count("id"), people=Sum("party_size"))
     )
-    # dia -> estado -> (reservas, personas)
     by_day = {}
     for r in rows:
         by_day.setdefault(r["service_date"], {})[r["status"]] = (r["n"], r["people"] or 0)
+    return by_day
 
-    def tally(start, end):
-        t = {"reservations": 0, "people": 0, "no_shows": 0, "cancelled": 0, "pending": 0}
-        day = start
-        while day <= end:
-            for status, (n, people) in by_day.get(day, {}).items():
-                if status in BOOKED:
-                    t["reservations"] += n
-                if status in CAME:
-                    t["people"] += people
-                if status == Reservation.Status.NO_SHOW:
-                    t["no_shows"] += n
-                if status == Reservation.Status.CANCELLED:
-                    t["cancelled"] += n
-                if status == Reservation.Status.PENDING:
-                    t["pending"] += n
-            day += timedelta(days=1)
-        return t
 
-    # Manana, con su lista.
-    tm = tally(tomorrow, tomorrow)
+def _add_to_tally(t, status, n, people):
+    if status in BOOKED:
+        t["reservations"] += n
+    if status in CAME:
+        t["people"] += people
+    if status == Reservation.Status.NO_SHOW:
+        t["no_shows"] += n
+    if status == Reservation.Status.CANCELLED:
+        t["cancelled"] += n
+    if status == Reservation.Status.PENDING:
+        t["pending"] += n
+
+
+def _tally(by_day, start, end):
+    t = {"reservations": 0, "people": 0, "no_shows": 0, "cancelled": 0, "pending": 0}
+    day = start
+    while day <= end:
+        for status, (n, people) in by_day.get(day, {}).items():
+            _add_to_tally(t, status, n, people)
+        day += timedelta(days=1)
+    return t
+
+
+def _people_on(by_day, day):
+    return sum(p for s, (n, p) in by_day.get(day, {}).items() if s in CAME)
+
+
+def _tomorrow_summary(venue, by_day, tomorrow, list_url):
+    tm = _tally(by_day, tomorrow, tomorrow)
     tomorrow_rows = list(
         Reservation.objects.filter(venue=venue, service_date=tomorrow, status__in=CAME)
         .select_related("guest")
@@ -127,64 +106,94 @@ def _summary(venue, today, list_url):
     tomorrow_qs = urlencode({"service_date__year": tomorrow.year,
                              "service_date__month": tomorrow.month,
                              "service_date__day": tomorrow.day})
+    return {
+        **tm,
+        "date": tomorrow,
+        "rows": tomorrow_rows,
+        "more": max(0, tm["reservations"] - tm["no_shows"] - len(tomorrow_rows)),
+        "url": f"{list_url}?{tomorrow_qs}",
+    }
 
-    # Semana: toda la semana (incluye lo ya reservado para los dias que
-    # faltan) y, para comparar, lo que llevaba la anterior a esta altura.
-    wk = tally(week_start, week_end)
-    wk_so_far = tally(week_start, today)
-    wk_prev = tally(week_start - timedelta(days=7), today - timedelta(days=7))
+
+def _week_days(by_day, week_start, today):
     days = []
     for i in range(7):
         day = week_start + timedelta(days=i)
-        people = sum(p for s, (n, p) in by_day.get(day, {}).items() if s in CAME)
-        days.append({"letter": DAY_LETTERS[i], "number": day.day, "people": people,
+        days.append({"letter": DAY_LETTERS[i], "number": day.day,
+                     "people": _people_on(by_day, day),
                      "is_today": day == today, "is_future": day > today})
     top = max((d["people"] for d in days), default=0) or 1
     for d in days:
         d["pct"] = round(d["people"] / top * 100)
+    return days
 
-    # Mes: igual, comparando con los mismos dias del mes anterior.
-    mo = tally(month_start, month_end)
-    mo_so_far = tally(month_start, today)
-    prev_same_day = min(today.day, (month_start - timedelta(days=1)).day)
-    mo_prev = tally(prev_month_start, prev_month_start.replace(day=prev_same_day))
+
+def _week_summary(by_day, today, week_start, week_end):
+    """Se compara con lo que llevaba la semana anterior a esta altura."""
+    wk = _tally(by_day, week_start, week_end)
+    wk_so_far = _tally(by_day, week_start, today)
+    wk_prev = _tally(by_day, week_start - timedelta(days=7), today - timedelta(days=7))
+    return {
+        **wk,
+        "range": f"{week_start.day} – {week_end.day} {MONTH_NAMES[week_end.month - 1][:3]}",
+        "days": _week_days(by_day, week_start, today),
+        "change": _pct_change(wk_so_far["people"], wk_prev["people"]),
+    }
+
+
+def _best_day(by_day, start, end):
     best_day, best_people = None, 0
-    day = month_start
-    while day <= today:
-        people = sum(p for s, (n, p) in by_day.get(day, {}).items() if s in CAME)
+    day = start
+    while day <= end:
+        people = _people_on(by_day, day)
         if people > best_people:
             best_day, best_people = day, people
         day += timedelta(days=1)
-    closed = mo_so_far["reservations"]  # reservas del mes hasta hoy
+    return best_day, best_people
+
+
+def _month_summary(by_day, today, month_start, month_end, prev_month_start, list_url):
+    mo = _tally(by_day, month_start, month_end)
+    mo_so_far = _tally(by_day, month_start, today)
+    prev_same_day = min(today.day, (month_start - timedelta(days=1)).day)
+    mo_prev = _tally(by_day, prev_month_start, prev_month_start.replace(day=prev_same_day))
+    best_day, best_people = _best_day(by_day, month_start, today)
+    closed = mo_so_far["reservations"]
     month_qs = urlencode({"service_date__year": today.year,
                           "service_date__month": today.month})
-
     return {
-        "tomorrow": {
-            **tm,
-            "date": tomorrow,
-            "rows": tomorrow_rows,
-            "more": max(0, tm["reservations"] - tm["no_shows"] - len(tomorrow_rows)),
-            "url": f"{list_url}?{tomorrow_qs}",
-        },
-        "week": {
-            **wk,
-            "range": f"{week_start.day} – {week_end.day} {MONTH_NAMES[week_end.month - 1][:3]}",
-            "days": days,
-            "change": _pct_change(wk_so_far["people"], wk_prev["people"]),
-        },
-        "month": {
-            **mo,
-            "name": MONTH_NAMES[today.month - 1],
-            "change": _pct_change(mo_so_far["people"], mo_prev["people"]),
-            "no_show_rate": round(mo_so_far["no_shows"] / closed * 100) if closed else 0,
-            "avg_party": round(mo_so_far["people"] / closed, 1) if closed else 0,
-            "best_day": best_day,
-            "best_people": best_people,
-            "url": f"{list_url}?{month_qs}",
-        },
+        **mo,
+        "name": MONTH_NAMES[today.month - 1],
+        "change": _pct_change(mo_so_far["people"], mo_prev["people"]),
+        "no_show_rate": round(mo_so_far["no_shows"] / closed * 100) if closed else 0,
+        "avg_party": round(mo_so_far["people"] / closed, 1) if closed else 0,
+        "best_day": best_day,
+        "best_people": best_people,
+        "url": f"{list_url}?{month_qs}",
     }
 
+
+def _summary(venue, today, list_url):
+    """Manana, semana (lun-dom) y mes, todo de una sola consulta agrupada."""
+    tomorrow = today + timedelta(days=1)
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
+    month_start = today.replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
+
+    by_day = _counts_by_day(
+        venue,
+        min(prev_month_start, week_start - timedelta(days=7)),
+        max(month_end, week_end, tomorrow),
+    )
+    return {
+        "tomorrow": _tomorrow_summary(venue, by_day, tomorrow, list_url),
+        "week": _week_summary(by_day, today, week_start, week_end),
+        "month": _month_summary(by_day, today, month_start, month_end,
+                                prev_month_start, list_url),
+    }
 
 
 def _empty(context):
@@ -192,7 +201,179 @@ def _empty(context):
     return context
 
 
-def dashboard_callback(request, context):
+def _plural(n):
+    return "s" if n != 1 else ""
+
+
+def _busy_table_ids(venue, now):
+    return set(
+        TableOccupancy.objects.filter(
+            table__area__venue=venue,
+            is_active=True,
+            starts_at__lte=now,
+            ends_at__gt=now,
+        ).values_list("table_id", flat=True)
+    )
+
+
+def _now_kpis(seated_now, free_tables, overdue, grace):
+    return [
+        {
+            "icon": "groups",
+            "label": "En sala",
+            "value": sum(r.party_size for r in seated_now),
+            "hint": f"{len(seated_now)} mesa{_plural(len(seated_now))} sentada"
+                    f"{_plural(len(seated_now))}",
+        },
+        {
+            "icon": "table_restaurant",
+            "label": "Mesas libres",
+            "value": len(free_tables),
+            "hint": ", ".join(t.code for t in free_tables[:4]) or "sala completa",
+        },
+        {
+            "icon": "schedule",
+            "label": "Sin llegar",
+            "value": len(overdue),
+            "hint": f"pasados los {grace} min de cortesia" if overdue else "nadie con retraso",
+            "tone": "bad" if overdue else "muted",
+        },
+    ]
+
+
+def _day_kpis(live, no_shows, covers, capacity, occupancy):
+    return [
+        {
+            "icon": "restaurant",
+            "label": "Cubiertos",
+            "value": covers,
+            "hint": f"de {capacity} plazas" if capacity else "sin mesas cargadas",
+        },
+        {
+            "icon": "donut_large",
+            "label": "Ocupación",
+            "value": f"{occupancy}%",
+            "hint": f"{len(live)} reserva{_plural(len(live))} en pie",
+        },
+        {
+            "icon": "person_off",
+            "label": "No-shows",
+            "value": len(no_shows),
+            "hint": "en este servicio",
+            "tone": "bad" if no_shows else "muted",
+        },
+    ]
+
+
+def _shift_rows(venue, today, live, capacity):
+    shifts = []
+    for shift in venue.shifts.filter(is_active=True).order_by("sort_order", "start_time"):
+        if not shift.applies_on(today):
+            continue
+        rows = [r for r in live if r.shift_id == shift.id]
+        shift_covers = sum(r.party_size for r in rows)
+        shifts.append({
+            "name": shift.name,
+            "hours": f"{shift.start_time:%H:%M} - {shift.end_time:%H:%M}",
+            "last_seating": shift.last_seating,
+            "reservations": len(rows),
+            "covers": shift_covers,
+            "pct": round(shift_covers / capacity * 100) if capacity else 0,
+        })
+    return shifts
+
+
+def _history(venue, today):
+    since = today - timedelta(days=6)
+    per_day = {
+        row["service_date"]: row
+        for row in Reservation.objects.filter(
+            venue=venue,
+            service_date__gte=since,
+            service_date__lte=today,
+            status__in=[*Reservation.LIVE_STATUSES, Reservation.Status.FINISHED],
+        )
+        .values("service_date")
+        .annotate(covers=Sum("party_size"), reservations=Count("id"))
+    }
+    history = []
+    for offset in range(7):
+        day = since + timedelta(days=offset)
+        row = per_day.get(day) or {}
+        history.append({
+            "day": day,
+            "label": DAY_NAMES[day.weekday()],
+            "number": day.day,
+            "covers": row.get("covers") or 0,
+            "reservations": row.get("reservations") or 0,
+            "is_today": day == today,
+        })
+    peak = max((h["covers"] for h in history), default=0) or 1
+    for row in history:
+        row["pct"] = round(row["covers"] / peak * 100)
+    return history
+
+
+def _areas(tables, busy_ids):
+    areas = {}
+    for table in tables:
+        bucket = areas.setdefault(
+            table.area.name, {"name": table.area.name, "tables": []}
+        )
+        bucket["tables"].append({
+            "code": table.code,
+            "seats": f"{table.min_seats}-{table.max_seats}",
+            "busy": table.id in busy_ids,
+        })
+    return list(areas.values())
+
+
+def _decorate_upcoming(upcoming, overdue, tz, index_url):
+    for reservation in upcoming:
+        reservation.step = next_step_button(reservation, index_url)
+        reservation.tone = STATUS_TONE.get(reservation.status, "muted")
+        reservation.local_time = timezone.localtime(reservation.starts_at, tz)
+        reservation.is_overdue = reservation in overdue
+
+
+def _hourly(venue, today, tz, live):
+    """Gente sentada por media hora (no reservas que empiezan): eso satura la cocina."""
+    hourly_labels, hourly_values = [], []
+    abiertos = [s for s in venue.shifts.filter(is_active=True) if s.applies_on(today)]
+    if not abiertos:
+        return hourly_labels, hourly_values
+    inicio = min(s.start_time for s in abiertos)
+    cierre = max(s.end_time for s in abiertos)
+    cursor = datetime.combine(today, inicio, tzinfo=tz)
+    limite = datetime.combine(today, cierre, tzinfo=tz)
+    if cierre <= inicio:
+        limite += timedelta(days=1)
+    while cursor < limite:
+        fin_franja = cursor + timedelta(minutes=30)
+        hourly_labels.append(cursor.strftime("%H:%M"))
+        hourly_values.append(
+            sum(r.party_size for r in live
+                if r.starts_at < fin_franja and r.ends_at > cursor)
+        )
+        cursor = fin_franja
+    return hourly_labels, hourly_values
+
+
+def _sources(venue, today):
+    etiquetas_origen = dict(Reservation.Source.choices)
+    origenes = (
+        Reservation.objects.filter(venue=venue, service_date__gte=today - timedelta(days=29),
+                                   service_date__lte=today)
+        .values("source")
+        .annotate(total=Count("id"))
+        .order_by("-total")
+    )
+    source_labels = [etiquetas_origen.get(o["source"], o["source"]) for o in origenes]
+    source_values = [o["total"] for o in origenes]
+    return source_labels, source_values
+
+
+def dashboard_callback(_request, context):
     venue = Venue.objects.filter(is_active=True).order_by("name").first()
     if venue is None:
         return _empty(context)
@@ -215,15 +396,7 @@ def dashboard_callback(request, context):
     seated_now = [r for r in live if r.status == Reservation.Status.SEATED]
     no_shows = [r for r in todays if r.status == Reservation.Status.NO_SHOW]
 
-    # Mesas libres en este instante: las que no tienen ocupacion activa viva.
-    busy_ids = set(
-        TableOccupancy.objects.filter(
-            table__area__venue=venue,
-            is_active=True,
-            starts_at__lte=now,
-            ends_at__gt=now,
-        ).values_list("table_id", flat=True)
-    )
+    busy_ids = _busy_table_ids(venue, now)
     tables = list(
         Table.objects.filter(area__venue=venue, is_active=True)
         .select_related("area")
@@ -236,8 +409,6 @@ def dashboard_callback(request, context):
         key=lambda r: r.starts_at,
     )
 
-    # Reservas cuya gracia ya vencio y siguen sin sentarse: es la fila que el
-    # anfitrion tiene que mirar primero.
     grace = services.policy_for(venue).no_show_grace_min
     overdue = [
         r for r in live
@@ -245,111 +416,8 @@ def dashboard_callback(request, context):
         and r.starts_at < now - timedelta(minutes=grace)
     ]
 
-    # Lo que pasa en la sala en este instante.
-    now_kpis = [
-        {
-            "icon": "groups",
-            "label": "En sala",
-            "value": sum(r.party_size for r in seated_now),
-            "hint": f"{len(seated_now)} mesa{'s' if len(seated_now) != 1 else ''} sentada"
-                    f"{'s' if len(seated_now) != 1 else ''}",
-        },
-        {
-            "icon": "table_restaurant",
-            "label": "Mesas libres",
-            "value": len(free_tables),
-            "hint": ", ".join(t.code for t in free_tables[:4]) or "sala completa",
-        },
-        {
-            "icon": "schedule",
-            "label": "Sin llegar",
-            "value": len(overdue),
-            "hint": f"pasados los {grace} min de cortesia" if overdue else "nadie con retraso",
-            "tone": "bad" if overdue else "muted",
-        },
-    ]
+    history = _history(venue, today)
 
-    # Como viene el dia entero.
-    day_kpis = [
-        {
-            "icon": "restaurant",
-            "label": "Cubiertos",
-            "value": covers,
-            "hint": f"de {capacity} plazas" if capacity else "sin mesas cargadas",
-        },
-        {
-            "icon": "donut_large",
-            "label": "Ocupación",
-            "value": f"{occupancy}%",
-            "hint": f"{len(live)} reserva{'s' if len(live) != 1 else ''} en pie",
-        },
-        {
-            "icon": "person_off",
-            "label": "No-shows",
-            "value": len(no_shows),
-            "hint": "en este servicio",
-            "tone": "bad" if no_shows else "muted",
-        },
-    ]
-
-    # Ocupacion por turno del dia.
-    shifts = []
-    for shift in venue.shifts.filter(is_active=True).order_by("sort_order", "start_time"):
-        if not shift.applies_on(today):
-            continue
-        rows = [r for r in live if r.shift_id == shift.id]
-        shift_covers = sum(r.party_size for r in rows)
-        shifts.append({
-            "name": shift.name,
-            "hours": f"{shift.start_time:%H:%M} - {shift.end_time:%H:%M}",
-            "last_seating": shift.last_seating,
-            "reservations": len(rows),
-            "covers": shift_covers,
-            "pct": round(shift_covers / capacity * 100) if capacity else 0,
-        })
-
-    # Cubiertos de los ultimos siete dias de servicio.
-    since = today - timedelta(days=6)
-    per_day = {
-        row["service_date"]: row
-        for row in Reservation.objects.filter(
-            venue=venue,
-            service_date__gte=since,
-            service_date__lte=today,
-            status__in=[*Reservation.LIVE_STATUSES, Reservation.Status.FINISHED],
-        )
-        .values("service_date")
-        .annotate(covers=Sum("party_size"), reservations=Count("id"))
-    }
-    history = []
-    for offset in range(7):
-        day = since + timedelta(days=offset)
-        row = per_day.get(day)
-        history.append({
-            "day": day,
-            "label": DAY_NAMES[day.weekday()],
-            "number": day.day,
-            "covers": (row or {}).get("covers") or 0,
-            "reservations": (row or {}).get("reservations") or 0,
-            "is_today": day == today,
-        })
-    peak = max((h["covers"] for h in history), default=0) or 1
-    for row in history:
-        row["pct"] = round(row["covers"] / peak * 100)
-
-    # Estado de la sala agrupado por zona.
-    areas = {}
-    for table in tables:
-        bucket = areas.setdefault(
-            table.area.name, {"name": table.area.name, "tables": []}
-        )
-        bucket["tables"].append({
-            "code": table.code,
-            "seats": f"{table.min_seats}-{table.max_seats}",
-            "busy": table.id in busy_ids,
-        })
-
-    # Lista de reservas filtrada al servicio de hoy (usa date_hierarchy).
     hoy_qs = urlencode({
         "service_date__year": today.year,
         "service_date__month": today.month,
@@ -357,54 +425,19 @@ def dashboard_callback(request, context):
     })
     list_url = reverse("admin:reservations_reservation_changelist")
     today_url = f"{list_url}?{hoy_qs}"
-    index_url = reverse("admin:index")
 
-    for reservation in upcoming:
-        reservation.step = next_step_button(reservation, index_url)
-        reservation.tone = STATUS_TONE.get(reservation.status, "muted")
-        reservation.local_time = timezone.localtime(reservation.starts_at, tz)
-        reservation.is_overdue = reservation in overdue
+    _decorate_upcoming(upcoming, overdue, tz, reverse("admin:index"))
 
-    # Ocupacion franja a franja del servicio de hoy. Se cuenta cuanta gente
-    # hay sentada en cada media hora, no cuantas reservas empiezan: es lo que
-    # dice de verdad cuando se satura la cocina.
-    hourly_labels, hourly_values = [], []
-    abiertos = [s for s in venue.shifts.filter(is_active=True) if s.applies_on(today)]
-    if abiertos:
-        inicio = min(s.start_time for s in abiertos)
-        cierre = max(s.end_time for s in abiertos)
-        cursor = datetime.combine(today, inicio, tzinfo=tz)
-        limite = datetime.combine(today, cierre, tzinfo=tz)
-        if cierre <= inicio:
-            limite += timedelta(days=1)
-        while cursor < limite:
-            fin_franja = cursor + timedelta(minutes=30)
-            hourly_labels.append(cursor.strftime("%H:%M"))
-            hourly_values.append(
-                sum(r.party_size for r in live
-                    if r.starts_at < fin_franja and r.ends_at > cursor)
-            )
-            cursor = fin_franja
-
-    # De donde llegan las reservas, ultimos 30 dias.
-    etiquetas_origen = dict(Reservation.Source.choices)
-    origenes = (
-        Reservation.objects.filter(venue=venue, service_date__gte=today - timedelta(days=29),
-                                   service_date__lte=today)
-        .values("source")
-        .annotate(total=Count("id"))
-        .order_by("-total")
-    )
-    source_labels = [etiquetas_origen.get(o["source"], o["source"]) for o in origenes]
-    source_values = [o["total"] for o in origenes]
+    hourly_labels, hourly_values = _hourly(venue, today, tz, live)
+    source_labels, source_values = _sources(venue, today)
 
     context.update({
         "dashboard_ready": True,
         "venue": venue,
         "service_date": today,
-        "now_kpis": now_kpis,
-        "day_kpis": day_kpis,
-        "shifts": shifts,
+        "now_kpis": _now_kpis(seated_now, free_tables, overdue, grace),
+        "day_kpis": _day_kpis(live, no_shows, covers, capacity, occupancy),
+        "shifts": _shift_rows(venue, today, live, capacity),
         "history": history,
         "history_labels": [f"{h['label']} {h['number']}" for h in history],
         "history_values": [h["covers"] for h in history],
@@ -414,7 +447,7 @@ def dashboard_callback(request, context):
         "hourly_peak": max(hourly_values) if hourly_values else 0,
         "source_labels": source_labels,
         "source_values": source_values,
-        "areas": list(areas.values()),
+        "areas": _areas(tables, busy_ids),
         "upcoming": upcoming[:8],
         "upcoming_total": len(upcoming),
         "overdue_count": len(overdue),

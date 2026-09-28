@@ -1,9 +1,4 @@
-"""
-Tests de la parte con mas aristas: disponibilidad, solapamiento y estados.
-
-    python manage.py test apps.reservations
-"""
-
+import secrets
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -17,6 +12,7 @@ from apps.reservations.models import Reservation, TableOccupancy
 from apps.venues.models import Area, DurationRule, Shift, Table, TableCombination, Venue
 
 LIMA = ZoneInfo("America/Lima")
+STARTS_AT = "starts_at"
 
 
 class BaseSalaTestCase(TestCase):
@@ -107,10 +103,7 @@ class DisponibilidadTests(BaseSalaTestCase):
 
 class SolapamientoTests(BaseSalaTestCase):
     def test_la_base_rechaza_dos_ocupaciones_activas_que_se_pisan(self):
-        """
-        La defensa central del sistema. No depende de la capa de servicio: es
-        Postgres el que rechaza la fila.
-        """
+        """La rechaza Postgres, no la capa de servicio."""
         inicio = self.cena()
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=inicio, party_size=2,
@@ -226,17 +219,14 @@ class CalendarioTests(BaseSalaTestCase):
 
 
 class BorradoTests(BaseSalaTestCase):
-    """
-    Borrar una reserva desde el admin arrastra sus movimientos, ocupaciones y
-    notificaciones. Antes, un usuario con permiso para borrar reservas no
-    podia: Django le pedia tambien permiso sobre "movimiento", que no se da
-    a nadie para que la bitacora no se toque.
-    """
+    """Borrar una reserva no debe exigir permiso sobre "movimiento", que no se da a nadie."""
 
     def setUp(self):
         from django.contrib.auth.models import Permission, User
 
-        self.staff = User.objects.create_user("host", password="x", is_staff=True)
+        # Clave aleatoria en cada ejecucion: el test entra con force_login.
+        self.staff = User.objects.create_user("host", password=secrets.token_urlsafe(),
+                                              is_staff=True)
         self.staff.user_permissions.add(
             Permission.objects.get(codename="view_reservation"),
             Permission.objects.get(codename="delete_reservation"),
@@ -275,10 +265,7 @@ class BorradoTests(BaseSalaTestCase):
 
 
 class ReservaWebTests(BaseSalaTestCase):
-    """
-    Entrada del formulario "Reserva una mesa" de zisa.pe (apps/reservations/api.py).
-    Los campos llevan los mismos nombres que en el Contact Form 7.
-    """
+    """Los campos llevan los mismos nombres que en el Contact Form 7 de zisa.pe."""
 
     TOKEN = "clave-de-prueba"
 
@@ -356,8 +343,7 @@ class ReservaWebTests(BaseSalaTestCase):
         self.assertEqual(r.status_code, 201, r.content)
 
     def test_sin_mesa_devuelve_el_motivo(self):
-        # Para parejas solo sirven S1 y S2 (S3 pide minimo 6): la tercera
-        # pareja a la misma hora ya no cabe.
+        # S3 pide minimo 6: la tercera pareja a la misma hora ya no cabe.
         for telefono in ("987000001", "987000002"):
             self.assertEqual(self.post(your_phone=telefono).status_code, 201)
         r = self.post(your_phone="987000003")
@@ -388,8 +374,6 @@ class ReservaWebTests(BaseSalaTestCase):
 
 
 class TareaNoShowTests(BaseSalaTestCase):
-    """Ruta que llama cron-job.org cada cinco minutos (api.sweep_no_shows_task)."""
-
     TOKEN = "clave-cron"
 
     def llamar(self, token=TOKEN):
@@ -440,8 +424,6 @@ class TareaNoShowTests(BaseSalaTestCase):
 
 
 class WalkInTests(BaseSalaTestCase):
-    """Quien llega sin reserva: se sienta en el acto y la mesa deja de ofrecerse."""
-
     def ahora(self):
         return self.cena(hora=20)  # un "ahora" fijo dentro del turno de cena
 
@@ -496,3 +478,145 @@ class WalkInTests(BaseSalaTestCase):
         with self.assertRaises(services.ReservationError):
             services.seat_walk_in(self.venue, self.t1, 6, now=self.ahora())
 
+
+
+class DetallesYMesasTests(BaseSalaTestCase):
+    def test_los_detalles_se_guardan_en_la_reserva(self):
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=4,
+            source=Reservation.Source.PHONE, tables=[self.t1],
+            details=services.ReservationDetails(
+                children=1, high_chairs=1, occasion="Cumpleanos",
+                guest_notes="Torta al final", internal_notes="Cliente habitual",
+            ),
+        )
+        reserva.refresh_from_db()
+        self.assertEqual((reserva.children, reserva.high_chairs), (1, 1))
+        self.assertEqual(reserva.occasion, "Cumpleanos")
+        self.assertEqual(reserva.guest_notes, "Torta al final")
+        self.assertEqual(reserva.internal_notes, "Cliente habitual")
+
+    def test_mesas_elegidas_que_no_alcanzan(self):
+        with self.assertRaisesMessage(services.ReservationError, "suman 4 plazas"):
+            services.create_reservation(
+                venue=self.venue, guest=self.guest, starts_at=self.cena(),
+                party_size=6, source=Reservation.Source.PHONE, tables=[self.t1],
+            )
+        self.assertFalse(Reservation.objects.exists())
+
+    def test_mover_conserva_la_mesa_si_sigue_libre(self):
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.PHONE, tables=[self.t1],
+        )
+        movida = services.move(reserva, self.cena(hora=21))
+        self.assertEqual(timezone.localtime(movida.starts_at, LIMA).hour, 21)
+        self.assertEqual(movida.table_codes, "S1")
+        self.assertTrue(movida.events.filter(comment__startswith="Movida").exists())
+
+    def test_mover_busca_otra_mesa_si_la_suya_esta_ocupada(self):
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.PHONE, tables=[self.t1],
+        )
+        # La reserva ocupa S1 hasta las 21:30; desde ahi S1 esta bloqueada.
+        services.block_table(self.t1, self.cena(hora=21, minuto=30), self.cena(hora=23),
+                             reason="Toldo roto")
+        movida = services.move(reserva, self.cena(hora=21, minuto=30))
+        self.assertEqual(movida.table_codes, "S2")
+
+    def test_mover_fuera_de_turno_falla(self):
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.PHONE, tables=[self.t1],
+        )
+        with self.assertRaises(services.NoAvailability):
+            services.move(reserva, self.cena(hora=17))
+
+
+class AdminReservaFormTests(BaseSalaTestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Permission, User
+
+        self.staff = User.objects.create_user("host", password=secrets.token_urlsafe(),
+                                              is_staff=True)
+        self.staff.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_reservation", "add_reservation", "change_reservation"]))
+        self.client.force_login(self.staff)
+
+    def formulario(self, inicio):
+        from apps.reservations.admin import ReservationForm
+
+        return ReservationForm(data={
+            "venue": self.venue.pk, "guest": self.guest.pk,
+            STARTS_AT: timezone.localtime(inicio).strftime("%Y-%m-%d %H:%M"),
+            "party_size": 2, "source": Reservation.Source.STAFF,
+        })
+
+    def test_hora_fuera_de_turno_es_error_del_campo(self):
+        form = self.formulario(self.cena(hora=17))
+        self.assertFalse(form.is_valid())
+        self.assertIn("No hay turno abierto", form.errors[STARTS_AT][0])
+
+    def test_sin_mesa_libre_es_error_del_campo(self):
+        for mesa in (self.t1, self.t2):
+            services.block_table(mesa, self.cena(hora=19), self.cena(hora=23),
+                                 reason="Evento")
+        form = self.formulario(self.cena())
+        self.assertFalse(form.is_valid())
+        self.assertIn("No queda mesa libre para 2 personas", form.errors[STARTS_AT][0])
+
+    def test_campos_de_solo_lectura_en_alta_y_en_ficha(self):
+        from django.contrib import admin
+        from django.urls import reverse
+
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.STAFF,
+        )
+        ma = admin.site._registry[Reservation]
+        self.assertEqual(ma.get_readonly_fields(None), [])
+        self.assertIn("status", ma.get_readonly_fields(None, reserva))
+
+        alta = self.client.get(reverse("admin:reservations_reservation_add"))
+        self.assertEqual(alta.status_code, 200)
+        ficha = self.client.get(reverse("admin:reservations_reservation_change",
+                                        args=[reserva.pk]))
+        self.assertEqual(ficha.status_code, 200)
+        self.assertContains(ficha, reserva.code)
+
+
+class SeedDemoDayTests(BaseSalaTestCase):
+    def correr(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        salida = StringIO()
+        call_command("seed_demo_day", *args, stdout=salida)
+        return salida.getvalue()
+
+    def test_crea_rehace_y_borra_las_de_ejemplo(self):
+        from apps.reservations.management.commands.seed_demo_day import DEMO_TAG
+
+        demo = Reservation.objects.filter(internal_notes__startswith=DEMO_TAG)
+        salida = self.correr()
+        self.assertIn("reservas de ejemplo creadas", salida)
+        creadas = demo.count()
+        self.assertGreater(creadas, 0)
+        # Ocasion y notas llegan por ReservationDetails.
+        self.assertTrue(demo.exclude(occasion="").exists())
+
+        salida = self.correr("--venue", self.venue.name)
+        self.assertIn(f"{creadas} reservas de ejemplo anteriores borradas", salida)
+
+        salida = self.correr("--clear")
+        self.assertIn("reservas de ejemplo borradas", salida)
+        self.assertFalse(demo.exists())
+
+    def test_sin_sede_avisa(self):
+        from django.core.management.base import CommandError
+
+        Venue.objects.update(is_active=False)
+        with self.assertRaises(CommandError):
+            self.correr()

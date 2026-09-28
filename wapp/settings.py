@@ -1,9 +1,4 @@
-"""
-Configuracion de Django para el proyecto Zisa Reservaciones.
-
-Los valores sensibles y los que cambian entre entornos se leen de un archivo
-.env que no se versiona. Usa .env.example como plantilla.
-"""
+"""Configuracion de Django. Los valores por entorno salen de .env (plantilla: .env.example)."""
 
 import os
 from pathlib import Path
@@ -43,8 +38,6 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-# Render publica el dominio del servicio en esta variable; asi el despliegue
-# funciona sin tener que copiarlo a mano en DJANGO_ALLOWED_HOSTS.
 RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
@@ -76,7 +69,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
-    # Dominio
     "apps.venues",
     "apps.guests",
     "apps.reservations",
@@ -85,7 +77,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # Sirve /static/ en produccion sin Nginx. Va justo despues de Security.
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -132,8 +123,6 @@ DATABASES = {
     }
 }
 
-# En produccion (Neon) la conexion llega como una sola URL:
-# postgresql://usuario:clave@host/base?sslmode=require
 if env("DATABASE_URL"):
     import dj_database_url
 
@@ -148,17 +137,33 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Negocio
 # ---------------------------------------------------------------------------
 
-# Restaurante que viene elegido al crear una reserva desde el panel. Si no
-# existe (o esta inactivo), se usa el primer restaurante activo.
 DEFAULT_VENUE_NAME = env("DEFAULT_VENUE_NAME", "Zisa")
 
-# Clave que comparte WordPress para enviar el formulario "Reserva una mesa"
-# (ver apps/reservations/api.py). Vacia = entrada web desactivada.
+# Vacio = entrada web desactivada.
 WEB_RESERVATION_TOKEN = env("WEB_RESERVATION_TOKEN", "")
 
-# Clave del servicio de cron externo (cron-job.org) que llama cada cinco
-# minutos a /api/tareas/no-shows/. Vacia = esa ruta desactivada.
+# Vacio = /api/tareas/no-shows/ desactivada.
 CRON_TOKEN = env("CRON_TOKEN", "")
+
+
+# ---------------------------------------------------------------------------
+# Correo (sin EMAIL_HOST, los correos van a la consola)
+# ---------------------------------------------------------------------------
+
+EMAIL_HOST = env("EMAIL_HOST", "")
+EMAIL_PORT = int(env("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "digital@zisa.pe")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = 15
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+    else "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Zisa <digital@zisa.pe>")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 
 # ---------------------------------------------------------------------------
@@ -175,20 +180,15 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # ---------------------------------------------------------------------------
 # Internacionalizacion
-#
-# En un sistema de reservaciones la hora local es el dominio entero: se guarda
-# en UTC (USE_TZ) y se muestra siempre en la zona del restaurante.
 # ---------------------------------------------------------------------------
 
 LANGUAGE_CODE = "es-pe"
-# El panel es solo en espanol. Sin esto, LocaleMiddleware toma el idioma del
-# navegador y a quien lo tenga en ingles le sale "Username" y "Log in".
+# Sin esto, LocaleMiddleware usa el idioma del navegador (ingles a algunos).
 LANGUAGES = [("es", "Español")]
 TIME_ZONE = env("TIME_ZONE", "America/Lima")
 USE_I18N = True
 USE_TZ = True
 
-# El local abre la semana en lunes.
 FIRST_DAY_OF_WEEK = 1
 
 
@@ -203,8 +203,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        # Solo comprime. La variante Manifest (con hash en el nombre) exige
-        # correr collectstatic antes de cada test que pinte una plantilla.
+        # Sin Manifest: exigiria collectstatic antes de los tests.
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
@@ -239,12 +238,7 @@ LOGGING = {
 
 
 def _admin_link(title, icon, model):
-    """
-    Entrada del menu que apunta a la lista de un modelo ("app_modelo").
-
-    Solo se muestra a quien puede ver ese modelo: sin esto, Unfold ensena
-    todos los enlaces a cualquier usuario del panel y al pulsar sale un 403.
-    """
+    """Enlace a la lista de `model` ("app_modelo"), visible solo con permiso de verlo."""
     app, name = model.split("_", 1)
     return {
         "title": title,
@@ -259,9 +253,7 @@ UNFOLD = {
     "SITE_HEADER": "Zisa",
     "SITE_SUBHEADER": "Panel de reservaciones",
     "SITE_SYMBOL": "restaurant",
-    # Sin enlace "Volver al sitio" en el login: la raiz solo redirige al panel.
     "SITE_URL": None,
-    # Logo negro sobre transparente; en modo oscuro zisa.css lo invierte.
     "SITE_LOGO": lambda request: static("admin/img/zisa-logo.png"),
     "LOGIN": {
         "image": lambda request: static("admin/img/login-salon.jpg"),
@@ -271,9 +263,7 @@ UNFOLD = {
     "DASHBOARD_CALLBACK": "wapp.dashboard.dashboard_callback",
     "BORDER_RADIUS": "8px",
     "STYLES": [lambda request: static("admin/zisa.css")],
-    # Paleta en blanco y negro: croma 0 en toda la escala, asi que no hay
-    # tinte en ningun tono. El unico color del panel es el de los estados
-    # (llega, atrasada, sentada...), definidos en static/admin/zisa.css.
+    # Blanco y negro; los unicos colores son los de estado, en zisa.css.
     "COLORS": {
         "base": {
             "50": "oklch(98.4% 0 0)",
@@ -288,10 +278,7 @@ UNFOLD = {
             "900": "oklch(17.6% 0 0)",
             "950": "oklch(10.6% 0 0)",
         },
-        # Grafito: el acento es casi negro y sin tinte, como el resto de la
-        # paleta. En tema claro Unfold usa 600 (botones, enlaces); en oscuro
-        # usa 500 para enlaces, y zisa.css invierte 600 a casi blanco para
-        # que los botones no desaparezcan sobre el fondo negro.
+        # En modo oscuro zisa.css invierte el 600 para que los botones se vean.
         "primary": {
             "50": "oklch(98.5% 0 0)",
             "100": "oklch(96.7% 0 0)",
@@ -317,10 +304,6 @@ UNFOLD = {
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
-        # Ordenado por lo que se usa: arriba lo del servicio de cada dia,
-        # despues los clientes y al final lo que se configura una vez. Los
-        # tres grupos de configuracion van plegados (se abren solos si la
-        # pagina actual esta dentro) para que el menu quepa sin scroll.
         "navigation": [
             {
                 "title": "Hoy",

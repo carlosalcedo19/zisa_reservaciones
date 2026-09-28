@@ -105,8 +105,8 @@ class Command(BaseCommand):
             name=name,
             defaults={
                 "timezone": "America/Lima",
-                "address": "Av. Ejemplo 123, Lima",
-                "phone": "+5115550123",
+                "address": "Avenida El Golf 591, Trujillo, La Libertad 13009",
+                "phone": "+51 970 183 691",
             },
         )
         if not created:

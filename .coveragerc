@@ -1,0 +1,11 @@
+[run]
+source = apps, wapp
+omit =
+    */migrations/*
+    */tests.py
+    wapp/settings.py
+    wapp/wsgi.py
+    wapp/asgi.py
+
+[xml]
+output = coverage.xml

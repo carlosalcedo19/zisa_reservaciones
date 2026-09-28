@@ -1,23 +1,16 @@
 """
-Entrada de reservas desde la web (formulario "Reserva una mesa" de zisa.pe).
+Reservas web. Llama el servidor de WordPress (integrations/wordpress/zisa-reservas.php),
+no el navegador, para no exponer la clave ni abrir CORS.
 
-El formulario es un Contact Form 7. No llama aqui desde el navegador: lo hace
-el servidor de WordPress al enviarse (integrations/wordpress/zisa-reservas.php),
-con una clave compartida en la cabecera Authorization. Asi la clave no sale
-nunca al navegador y no hace falta abrir CORS.
-
-Recibe los campos con los mismos nombres que el formulario:
+Campos (nombres del Contact Form 7):
 
     full-name         nombre del cliente
     your-phone        telefono (cualquier formato: se normaliza)
+    your-email        correo (opcional; a el llegan confirmacion y cancelacion)
     num-person        numero de personas
     date-reservation  AAAA-MM-DD
     time-field        "07:30 PM" (como lo manda el desplegable) o "19:30"
     indications       indicaciones especiales (opcional)
-
-Toda la logica de negocio (antelacion, grupo maximo web, turnos, dias
-cerrados, eleccion de mesa, autoconfirmacion) es la misma que en el panel:
-services.create_reservation con origen WEB.
 
 Respuestas (JSON):
     201  {"ok": true, "code", "status", "message"}   reserva creada
@@ -35,6 +28,7 @@ from datetime import datetime
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.http import JsonResponse
 from django.utils import timezone
@@ -75,22 +69,19 @@ def _parse_time(value):
 
 
 def _read(request):
-    """Acepta JSON o formulario (asi sirve tambien para probar con curl)."""
     if request.content_type == "application/json":
         try:
             data = json.loads(request.body or b"{}")
         except ValueError:
             return None
         return data if isinstance(data, dict) else None
-    # El plugin de WordPress repite los campos en la URL: desde el hosting de
-    # zisa.pe el cuerpo llega vacio al pasar por Cloudflare, la URL no.
+    # Via Cloudflare el cuerpo llega vacio; el plugin repite los campos en la URL.
     if not request.POST and request.GET:
         return request.GET
     return request.POST
 
 
 def _clean(data):
-    """Valida y convierte los campos. Devuelve (limpios, errores)."""
     errors = {}
     get = lambda k: str(data.get(k) or "").strip()  # noqa: E731
 
@@ -120,9 +111,16 @@ def _clean(data):
     if at is None:
         errors["time-field"] = "Elige una hora."
 
+    email = get("your-email")[:254]
+    if email:
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors["your-email"] = "Revisa el correo."
+
     notes = get("indications")[:1000]
-    return {"name": name, "phone": phone, "party": party, "day": day, "time": at,
-            "notes": notes}, errors
+    return {"name": name, "phone": phone, "email": email, "party": party, "day": day,
+            "time": at, "notes": notes}, errors
 
 
 @csrf_exempt  # llamada servidor a servidor, protegida por la clave
@@ -148,15 +146,13 @@ def web_reservation(request):
     tz = services.venue_tz(venue)
     starts_at = datetime.combine(clean["day"], clean["time"], tzinfo=tz)
 
-    # Cliente y reserva van juntos: si la reserva se rechaza (sin mesa, dia
-    # cerrado...) tampoco queda creada la ficha del cliente. Si no, cada
-    # intento fallido de la web dejaria un cliente suelto.
+    # Misma transaccion: un intento rechazado no deja una ficha de cliente suelta.
     try:
         with transaction.atomic():
-            guest = services.get_or_create_guest(clean["phone"], clean["name"])
+            guest = services.get_or_create_guest(clean["phone"], clean["name"],
+                                                 clean["email"])
 
-            # Reenvio del mismo formulario (doble clic, recarga): se devuelve
-            # la que ya existe en vez de crear otra.
+            # Reenvio del formulario (doble clic, recarga): devolver la existente.
             existing = Reservation.objects.filter(
                 venue=venue, guest=guest, starts_at=starts_at,
                 status__in=Reservation.LIVE_STATUSES,
@@ -171,7 +167,7 @@ def web_reservation(request):
                 starts_at=starts_at,
                 party_size=clean["party"],
                 source=Reservation.Source.WEB,
-                guest_notes=clean["notes"],
+                details=services.ReservationDetails(guest_notes=clean["notes"]),
             )
     except ValidationError as exc:  # telefono sin digitos
         msg = exc.messages[0] if exc.messages else "Revisa el teléfono."
@@ -201,14 +197,7 @@ def _success_message(reservation, tz):
 @csrf_exempt  # la llama un cron externo, protegida por CRON_TOKEN
 @require_POST
 def sweep_no_shows_task(request):
-    """
-    Marca los no-shows de todas las sedes activas.
-
-    En Render no hay cron gratuito, asi que cron-job.org llama aqui cada cinco
-    minutos con "Authorization: Bearer <CRON_TOKEN>". Esa misma llamada
-    mantiene despierto el servicio, que en el plan gratuito se duerme tras
-    quince minutos sin trafico y haria esperar al formulario de la web.
-    """
+    """Lo llama cron-job.org cada 5 min: Render gratis no tiene cron y asi el servicio no se duerme."""
     if not getattr(settings, "CRON_TOKEN", ""):
         return _json(False, 503, message="La tarea programada está desactivada.")
     if not _authorized(request, "CRON_TOKEN"):

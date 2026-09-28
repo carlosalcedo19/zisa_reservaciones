@@ -28,3 +28,7 @@ staticfiles/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# SonarQube / SonarScanner
+.scannerwork/
+coverage.xml

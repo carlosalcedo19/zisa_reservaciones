@@ -1,14 +1,4 @@
-"""
-Admin de reservas.
-
-Toda escritura pasa por apps.reservations.services, nunca por el ModelForm a
-pelo. Es el unico sitio donde caben, en la misma transaccion, el calculo de
-la hora de fin y del dia de servicio, la asignacion de mesa, la revalidacion
-del solapamiento y el registro en el historial.
-
-El formulario valida antes de guardar, para que un choque de horario salga
-como error de campo y no como un 500.
-"""
+"""Admin de reservas. Toda escritura pasa por apps.reservations.services, nunca por el ModelForm."""
 
 import uuid
 from datetime import timedelta
@@ -49,9 +39,7 @@ STATUS_TONES = {
     Reservation.Status.NO_SHOW: "bad",
 }
 
-#: El paso que casi siempre toca despues de cada estado. Es el unico boton que
-#: se ofrece en la lista y en el panel: el resto de transiciones siguen en la
-#: ficha, donde hay sitio para pensarlas.
+# Unico boton rapido en lista y panel; el resto de transiciones quedan en la ficha.
 NEXT_STEP = {
     Reservation.Status.WAITLISTED: ("confirm", "Confirmar", "check"),
     Reservation.Status.PENDING: ("confirm", "Confirmar", "check"),
@@ -61,7 +49,6 @@ NEXT_STEP = {
 
 
 def chip(text, tone="muted"):
-    """Chip de estado con las clases de static/admin/zisa.css (claro y oscuro)."""
     return format_html('<span class="zs-chip" data-tone="{}">{}</span>', tone, text)
 
 
@@ -70,19 +57,15 @@ _PK_MUESTRA = str(uuid.UUID(int=0))
 
 @lru_cache(maxsize=None)
 def _url_molde(nombre):
-    # reverse() es lento para llamarlo cientos de veces por pagina (plano de
-    # sala, listas): se resuelve una vez con un id de muestra y despues solo
-    # se sustituye el id.
+    # reverse() es lento cientos de veces por pagina: se resuelve una vez y se sustituye el id.
     return reverse(f"admin:reservations_reservation_{nombre}", args=[_PK_MUESTRA])
 
 
 def reservation_url(nombre, pk):
-    """URL de una vista de reserva ("change", "seat"...) sin llamar a reverse."""
     return _url_molde(nombre).replace(_PK_MUESTRA, str(pk))
 
 
 def next_step_button(reservation, back_url):
-    """Boton del siguiente paso, o vacio si la reserva ya esta cerrada."""
     paso = NEXT_STEP.get(reservation.status)
     if paso is None:
         return ""
@@ -96,39 +79,36 @@ def next_step_button(reservation, back_url):
 
 
 def default_venue():
-    """Restaurante por defecto (settings.DEFAULT_VENUE_NAME) o el primero activo."""
     activos = Venue.objects.filter(is_active=True).order_by("name")
     return (activos.filter(name__iexact=settings.DEFAULT_VENUE_NAME).first()
             or activos.first())
 
 
 class ReservationForm(forms.ModelForm):
-    """
-    Comprueba calendario, antelacion y disponibilidad antes de guardar.
-
-    Sin esto, el choque de horario solo aparecia al insertar y salia como un
-    IntegrityError de Postgres en vez de como un mensaje entendible.
-    """
+    """Valida antes de guardar para que un choque salga como error de campo y no como IntegrityError."""
 
     class Meta:
         model = Reservation
-        fields = "__all__"
+        # Explicitos: un campo nuevo del modelo no entra en el formulario sin decidirlo.
+        fields = (
+            "venue", "guest", "shift",
+            "starts_at", "ends_at", "service_date", "duration_min",
+            "party_size", "children", "high_chairs",
+            "status", "source", "occasion",
+            "guest_notes", "internal_notes", "tags",
+            "deposit_amount", "deposit_status",
+            "confirmed_at", "seated_at", "released_at", "cancelled_at",
+            "cancellation_reason", "created_by",
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Una reserva creada desde el panel la toma alguien del equipo; el
-        # origen web tiene su propia ventana de antelacion.
-        # Va en self.initial y no en field.initial: un ModelForm nuevo copia
-        # ahi los valores de la instancia vacia (venue=None, source=el del
-        # modelo) y esos ganan a field.initial. Lo que llegue por la URL
-        # (?venue=...) se respeta.
+        # self.initial y no field.initial: los valores de la instancia vacia ganan a field.initial.
         pedido = kwargs.get("initial") or {}
-        # Ojo: el id es un UUID con default, asi que una reserva nueva ya
-        # tiene pk antes de guardarse. Lo que dice si es un alta es _state.
+        # El pk UUID tiene default, asi que el alta se detecta con _state, no con pk.
         if self.instance._state.adding:
             if "source" in self.fields and "source" not in pedido:
                 self.initial["source"] = Reservation.Source.STAFF
-            # Y casi siempre es para el mismo local: viene ya elegido.
             if "venue" in self.fields and "venue" not in pedido:
                 venue = default_venue()
                 if venue is not None:
@@ -155,7 +135,7 @@ class ReservationForm(forms.ModelForm):
                 services.validate_lead_time(
                     venue, starts_at, cleaned.get("source") or Reservation.Source.STAFF
                 )
-            services.validate_calendar(venue, starts_at, ends_at)
+            services.validate_calendar(venue, starts_at)
 
             excluir = None if es_alta else self.instance
             if not services.find_availability(venue, starts_at, ends_at, party_size,
@@ -207,11 +187,10 @@ class EventInline(TabularInline):
 @admin.register(Reservation)
 class ReservationAdmin(ModelAdmin):
     form = ReservationForm
-    # Tras "status_chip", get_list_display anade la columna del siguiente paso.
+    # get_list_display anade la columna del siguiente paso tras "status_chip".
     list_display = ("when", "guest_display", "party_size", "tables_display",
                     "status_chip", "source", "code")
     list_display_links = ("when", "guest_display")
-    # Avisa antes de salir de una ficha con cambios sin guardar.
     warn_unsaved_form = True
     list_filter = (
         "status",
@@ -227,15 +206,12 @@ class ReservationAdmin(ModelAdmin):
     list_select_related = ("guest", "venue", "shift")
 
     def get_queryset(self, request):
-        # Las mesas de cada fila en una sola consulta; sin esto la columna
-        # "mesas" hacia una consulta por reserva (100 por pagina).
+        # Evita una consulta por fila en la columna "mesas".
         return super().get_queryset(request).prefetch_related(active_occupancies_prefetch())
-    # En lote, desde la lista.
     actions = ["action_confirm", "action_seat", "action_finish", "action_no_show",
                "action_cancel"]
 
-    # Alta: solo lo que hay que decidir. La mesa, la hora de fin, el dia de
-    # servicio y la duracion los resuelve la capa de servicio.
+    # Mesa, hora de fin, dia de servicio y duracion los calcula la capa de servicio.
     add_fieldsets = (
         (None, {
             "fields": (("venue", "source"), "guest"),
@@ -252,10 +228,7 @@ class ReservationAdmin(ModelAdmin):
             "fields": ("occasion", "tags", "guest_notes", "internal_notes")}),
     )
 
-    # El primer bloque no lleva "tab": Unfold lo deja siempre visible como
-    # cabecera de la ficha y convierte el resto en pestanas, incluidos los dos
-    # inlines (tab = True). Asi la ficha cabe en una pantalla en vez de pedir
-    # scroll hasta el pie para llegar a las acciones.
+    # Primer bloque sin "tab": Unfold lo fija como cabecera y el resto van en pestanas.
     fieldsets = (
         (None, {"fields": (("code", "status"), ("venue", "guest"), "source")}),
         ("Fecha y horario", {
@@ -291,20 +264,12 @@ class ReservationAdmin(ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
-            return ()
+            return []
         # El estado se cambia con las acciones, que registran el movimiento.
-        return ("code", "status", "ends_at", "service_date", "shift", "duration_min")
+        return ["code", "status", "ends_at", "service_date", "shift", "duration_min"]
 
-    # ------------------------------------------------------------------
-    # Borrado
-    #
-    # Una reserva arrastra al borrarse sus ocupaciones de mesa, su historial
-    # de movimientos y sus notificaciones. Son partes de la reserva, no datos
-    # propios: quien puede borrar la reserva puede borrarlas con ella. Sin
-    # esto Django pedia permiso de borrado sobre cada uno, y los movimientos
-    # no lo tienen a proposito (no se pueden borrar sueltos desde su admin).
-    # ------------------------------------------------------------------
-
+    # Partes de la reserva: se borran con ella sin pedir su permiso propio
+    # (ReservationEvent no lo tiene a proposito).
     PARTES_DE_LA_RESERVA = ("reservations.TableOccupancy", "reservations.ReservationEvent",
                             "notifications.Notification")
 
@@ -314,8 +279,7 @@ class ReservationAdmin(ModelAdmin):
         return borrados, cuenta, set(permisos) - partes, protegidos
 
     def _refresh_guests(self, guest_ids):
-        # Visitas, no-shows y cancelaciones salen del historial de reservas:
-        # al borrar una hay que recalcularlos o quedan inflados.
+        # Los contadores salen del historial: sin recalcular quedan inflados.
         for guest in Guest.objects.filter(pk__in=guest_ids):
             guest.refresh_counters()
 
@@ -337,16 +301,16 @@ class ReservationAdmin(ModelAdmin):
                 starts_at=obj.starts_at,
                 party_size=obj.party_size,
                 source=obj.source,
-                children=obj.children or 0,
-                high_chairs=obj.high_chairs or 0,
-                occasion=obj.occasion or "",
-                guest_notes=obj.guest_notes or "",
-                internal_notes=obj.internal_notes or "",
+                details=services.ReservationDetails(
+                    children=obj.children or 0,
+                    high_chairs=obj.high_chairs or 0,
+                    occasion=obj.occasion or "",
+                    guest_notes=obj.guest_notes or "",
+                    internal_notes=obj.internal_notes or "",
+                ),
                 user=request.user,
             )
-            # El admin sigue trabajando con `obj` despues de esto (mensaje de
-            # exito, redireccion y guardado de las etiquetas), asi que se le
-            # copia lo que calculo el servicio.
+            # El admin sigue usando `obj` (mensaje, redireccion, etiquetas).
             obj.pk = reserva.pk
             for campo in ("code", "ends_at", "service_date", "duration_min",
                           "status", "shift_id", "confirmed_at", "created_by_id",
@@ -363,8 +327,7 @@ class ReservationAdmin(ModelAdmin):
         anterior = Reservation.objects.get(pk=obj.pk)
         nueva_hora = obj.starts_at
 
-        # Se guarda con los campos calculados intactos; si cambio la hora, es
-        # services.move quien la mueve, revalida la mesa y deja rastro.
+        # El cambio de hora lo aplica services.move, que revalida la mesa.
         obj.starts_at = anterior.starts_at
         obj.ends_at = anterior.ends_at
         obj.service_date = anterior.service_date
@@ -378,14 +341,8 @@ class ReservationAdmin(ModelAdmin):
                 self.message_user(request, f"No se pudo mover: {exc}", messages.ERROR)
 
 
-    # ------------------------------------------------------------------
-    # Acciones sobre una sola reserva
-    #
-    # Se registran como URLs propias en vez de usar actions_detail de Unfold,
-    # que las pinta en la cabecera del formulario. Aqui se dibujan al pie de
-    # la ficha, y solo aparecen las transiciones que el estado actual admite.
-    # ------------------------------------------------------------------
-
+    # URLs propias en vez de actions_detail de Unfold, para pintarlas al pie
+    # y solo las transiciones validas.
     MOTIVOS_CANCELACION = [
         "El cliente llamó para cancelar",
         "El cliente no contesta",
@@ -443,9 +400,7 @@ class ReservationAdmin(ModelAdmin):
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def get_list_display(self, request):
-        # La columna del siguiente paso necesita la URL de la lista, para que
-        # el boton devuelva al mismo filtro y a la misma pagina. Se construye
-        # por peticion: el ModelAdmin es compartido entre hilos.
+        # Por peticion: el ModelAdmin es compartido entre hilos.
         volver = request.get_full_path()
 
         @admin.display(description="siguiente paso")
@@ -460,8 +415,7 @@ class ReservationAdmin(ModelAdmin):
         return tuple(columnas)
 
     def _back(self, object_id, request=None):
-        # ?next= lo ponen los botones rapidos de la lista y del panel: tras
-        # sentar a alguien se vuelve a donde se estaba, no a su ficha.
+        # ?next= lo ponen los botones rapidos para volver a la lista o al panel.
         siguiente = request.GET.get("next") if request else None
         if siguiente and url_has_allowed_host_and_scheme(
             siguiente, allowed_hosts={request.get_host()},
@@ -499,7 +453,6 @@ class ReservationAdmin(ModelAdmin):
                            "marcada como no-show")
 
     def view_cancel(self, request, object_id):
-        """Pide el motivo antes de cancelar, para que quede escrito."""
         reserva = self.get_object(request, object_id)
         if reserva is None:
             self.message_user(request, "La reserva ya no existe.", messages.ERROR)
@@ -536,8 +489,7 @@ class ReservationAdmin(ModelAdmin):
 
     @admin.display(description="hora", ordering="starts_at")
     def when(self, obj):
-        # En la hora del local, no en la del servidor: astimezone() sin
-        # argumento usaba la zona del sistema operativo.
+        # Hora del local: astimezone() sin argumento usa la zona del sistema.
         local = timezone.localtime(obj.starts_at, services.venue_tz(obj.venue))
         return format_html(
             '<span class="zs-cell"><b class="zs-cell-time">{}</b><small>{}</small></span>',

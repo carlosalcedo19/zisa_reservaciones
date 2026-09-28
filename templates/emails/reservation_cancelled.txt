@@ -1,0 +1,12 @@
+{% autoescape off %}Hola {{ guest.name }},
+
+Tu reserva {{ reservation.code }} en {{ venue.name }} para el {{ day }} a las {{ time }} ({{ people }}) fue cancelada.
+{% if reservation.cancellation_reason %}
+Motivo: {{ reservation.cancellation_reason }}
+{% endif %}
+Si quieres una nueva fecha, responde a este correo{% if venue.phone %} o llámanos al {{ venue.phone }}{% endif %}.
+
+{{ venue.name }}{% if venue.address %}
+{{ venue.address }}{% endif %}{% if venue.phone %}
+{{ venue.phone }}{% endif %}
+{% endautoescape %}

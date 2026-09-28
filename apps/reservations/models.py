@@ -1,13 +1,4 @@
-"""
-El centro del sistema.
 
-Reservation guarda el *que* y el *cuando*; TableOccupancy guarda el *donde*, y
-es la tabla sobre la que Postgres impide fisicamente el solapamiento.
-
-Las claves primarias son UUID: el identificador de una reserva o de un
-cliente acaba en un enlace que se manda por WhatsApp, y un correlativo
-delata cuantas reservas hay y deja probar la de al lado.
-"""
 
 import secrets
 import uuid
@@ -19,17 +10,15 @@ from django.db import models
 from django.db.models import F, Func, Q
 
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # sin I, L, O, 0, 1
+VENUE_MODEL = "venues.Venue"
 
 
 def generate_code(prefix="ZS", length=6):
-    """Codigo publico corto, legible por telefono y sin caracteres ambiguos."""
     body = "".join(secrets.choice(CODE_ALPHABET) for _ in range(length))
     return f"{prefix}-{body}"
 
 
 class TsTzRange(Func):
-    """tstzrange(starts_at, ends_at) para la restriccion de exclusion."""
-
     function = "TSTZRANGE"
     output_field = DateTimeRangeField()
 
@@ -70,10 +59,9 @@ class Reservation(models.Model):
         REFUNDED = "refunded", "Devuelto"
         KEPT = "kept", "Retenido"
 
-    #: Solo estos estados ocupan mesa. El resto libera el rango de inmediato.
+    # Solo estos estados ocupan mesa.
     LIVE_STATUSES = (Status.PENDING, Status.CONFIRMED, Status.SEATED)
 
-    #: Transiciones permitidas. La capa de servicio las hace cumplir.
     TRANSITIONS = {
         Status.WAITLISTED: {Status.PENDING, Status.CONFIRMED, Status.CANCELLED},
         Status.PENDING: {Status.CONFIRMED, Status.SEATED, Status.CANCELLED,
@@ -89,7 +77,7 @@ class Reservation(models.Model):
                           editable=False)
 
     code = models.CharField("código", max_length=12, unique=True, editable=False)
-    venue = models.ForeignKey("venues.Venue", on_delete=models.PROTECT,
+    venue = models.ForeignKey(VENUE_MODEL, on_delete=models.PROTECT,
                               related_name="reservations", verbose_name="restaurante")
     guest = models.ForeignKey("guests.Guest", on_delete=models.PROTECT,
                               related_name="reservations", verbose_name="cliente")
@@ -136,8 +124,7 @@ class Reservation(models.Model):
                                       choices=DepositStatus.choices,
                                       default=DepositStatus.NOT_APPLICABLE)
 
-    # Sellos por transicion. Con un unico campo de estado, la puntualidad, la
-    # rotacion real y el no-show por franja no se pueden reconstruir despues.
+    # Sellos por transicion: con solo el estado no se reconstruye puntualidad ni rotacion.
     confirmed_at = models.DateTimeField("confirmada en", null=True, blank=True)
     seated_at = models.DateTimeField("sentada en", null=True, blank=True)
     released_at = models.DateTimeField("liberada en", null=True, blank=True)
@@ -178,7 +165,6 @@ class Reservation(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            # Colision practicamente imposible (31^6), pero es barato reintentar.
             for _ in range(5):
                 candidate = generate_code()
                 if not Reservation.objects.filter(code=candidate).exists():
@@ -201,8 +187,6 @@ class Reservation(models.Model):
 
     @property
     def table_codes(self):
-        # Si la consulta trajo las mesas con active_occupancies_prefetch()
-        # se usan esas; si no, una consulta. En listas, siempre lo primero.
         precargadas = getattr(self, "active_occupancies", None)
         if precargadas is not None:
             return ", ".join(o.table.code for o in precargadas) or "sin asignar"
@@ -218,17 +202,9 @@ class Reservation(models.Model):
 
 class TableOccupancy(models.Model):
     """
-    Una mesa ocupada en un rango de tiempo.
-
-    Cubre tanto las reservas como los bloqueos (mantenimiento, evento
-    privado): si fueran dos tablas distintas, una sola restriccion de
-    exclusion no podria cubrir ambas y un bloqueo no impediria una reserva
-    encima. Con reservation = NULL la fila es un bloqueo.
-
-    starts_at y ends_at estan duplicados desde Reservation a proposito: una
-    restriccion de exclusion no puede leer columnas de otra tabla, asi que el
-    rango tiene que vivir aqui. La capa de servicio los mantiene sincronizados
-    dentro de la misma transaccion.
+    Reservas y bloqueos (reservation = NULL) comparten tabla para que una sola
+    restriccion de exclusion cubra ambos. El rango se duplica de Reservation
+    porque la restriccion no puede leer otra tabla.
     """
 
     id = models.UUIDField("id", primary_key=True, default=uuid.uuid4,
@@ -290,12 +266,7 @@ class TableOccupancy(models.Model):
 
 
 class ReservationEvent(models.Model):
-    """
-    Bitacora inmutable: solo se inserta, nunca se edita.
-
-    Cuando un cliente reclama "yo si reserve" o dos personas del equipo se
-    contradicen, esto es la respuesta.
-    """
+    """Bitacora inmutable: solo se inserta, nunca se edita."""
 
     id = models.UUIDField("id", primary_key=True, default=uuid.uuid4,
                           editable=False)
@@ -321,16 +292,10 @@ class ReservationEvent(models.Model):
 
 
 class WaitlistEntry(models.Model):
-    """
-    Convierte un "no hay mesa" en una venta cuando alguien cancela a las seis
-    de la tarde. Es la funcionalidad con mejor retorno del sistema y casi
-    siempre queda fuera del alcance inicial.
-    """
-
     id = models.UUIDField("id", primary_key=True, default=uuid.uuid4,
                           editable=False)
 
-    venue = models.ForeignKey("venues.Venue", on_delete=models.CASCADE,
+    venue = models.ForeignKey(VENUE_MODEL, on_delete=models.CASCADE,
                               related_name="waitlist", verbose_name="restaurante")
     guest = models.ForeignKey("guests.Guest", on_delete=models.PROTECT,
                               related_name="waitlist_entries", verbose_name="cliente")
@@ -364,15 +329,12 @@ class WaitlistEntry(models.Model):
 
 
 class ReservationPolicy(models.Model):
-    """
-    Reglas que cambian por temporada. Si viven en el codigo, cada ajuste es un
-    despliegue; si viven en una fila, el gerente las mueve solo.
-    """
+    """En BD y no en codigo: el gerente las ajusta sin despliegue."""
 
     id = models.UUIDField("id", primary_key=True, default=uuid.uuid4,
                           editable=False)
 
-    venue = models.OneToOneField("venues.Venue", on_delete=models.CASCADE,
+    venue = models.OneToOneField(VENUE_MODEL, on_delete=models.CASCADE,
                                  related_name="policy", verbose_name="restaurante")
     min_lead_hours = models.PositiveSmallIntegerField(
         "antelación mínima (horas)", default=2,
@@ -408,12 +370,7 @@ class ReservationPolicy(models.Model):
 
 
 def active_occupancies_prefetch():
-    """
-    Prefetch de las mesas activas de cada reserva, en reservation.active_occupancies.
-
-    Reservation.table_codes lo aprovecha: usalo en cualquier lista que muestre
-    las mesas, o cada fila hara su propia consulta.
-    """
+    """Usalo en listas que muestren table_codes, o cada fila hara su propia consulta."""
     return models.Prefetch(
         "occupancies",
         queryset=TableOccupancy.objects.filter(is_active=True)

@@ -1,11 +1,4 @@
-"""
-Capa de servicio de reservas.
-
-Ninguna escritura debe pasar por un ModelForm ni por el admin en crudo. Este
-modulo es el unico lugar donde caben, en la misma transaccion: el
-select_for_update, el calculo de ends_at y service_date, la sincronizacion de
-TableOccupancy y el registro en ReservationEvent.
-"""
+"""Unico punto de escritura de reservas: ocupaciones y eventos van en la misma transaccion."""
 
 import logging
 import zoneinfo
@@ -16,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.guests.models import Guest, normalize_phone
+from apps.notifications import services as notifications
 from apps.reservations.models import (
     Reservation,
     ReservationEvent,
@@ -39,23 +33,12 @@ class InvalidTransition(ReservationError):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Utilidades de tiempo
-# ---------------------------------------------------------------------------
-
-
 def venue_tz(venue):
     return zoneinfo.ZoneInfo(venue.timezone)
 
 
 def service_date_for(venue, starts_at):
-    """
-    Dia del servicio al que pertenece un inicio.
-
-    Una cena que empieza a las 23:30 y termina a la 01:00 sigue perteneciendo
-    al servicio de la noche anterior, asi que las horas antes de las 06:00
-    locales cuentan como el dia previo.
-    """
+    # Antes de las 06:00 locales cuenta como el servicio de la noche anterior.
     local = timezone.localtime(starts_at, venue_tz(venue))
     if local.hour < 6:
         return (local - timedelta(days=1)).date()
@@ -68,7 +51,6 @@ def policy_for(venue):
 
 
 def duration_for(venue, party_size):
-    """Minutos que ocupa un grupo, segun las reglas de duracion de la sede."""
     rule = (
         DurationRule.objects.filter(
             venue=venue, min_party__lte=party_size, max_party__gte=party_size
@@ -82,7 +64,6 @@ def duration_for(venue, party_size):
 
 
 def shift_for(venue, starts_at):
-    """Turno que cubre un inicio concreto, o None si el local esta cerrado."""
     local = timezone.localtime(starts_at, venue_tz(venue))
     day = service_date_for(venue, starts_at)
     for shift in venue.shifts.filter(is_active=True).order_by("sort_order", "start_time"):
@@ -91,12 +72,7 @@ def shift_for(venue, starts_at):
     return None
 
 
-# ---------------------------------------------------------------------------
-# Validaciones previas
-# ---------------------------------------------------------------------------
-
-
-def validate_calendar(venue, starts_at, ends_at):
+def validate_calendar(venue, starts_at):
     day = service_date_for(venue, starts_at)
     local_start = timezone.localtime(starts_at, venue_tz(venue))
 
@@ -139,15 +115,8 @@ def validate_lead_time(venue, starts_at, source):
         )
 
 
-# ---------------------------------------------------------------------------
-# Disponibilidad
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class Offer:
-    """Una combinacion de mesas que sirve para un grupo en un rango."""
-
     tables: tuple
     capacity: int
     slack: int  # capacidad sobrante; menos es mejor
@@ -159,7 +128,6 @@ class Offer:
 
 
 def busy_table_ids(venue, starts_at, ends_at, exclude_reservation=None):
-    """Ids de mesas con una ocupacion activa que se pisa con el rango."""
     qs = TableOccupancy.objects.filter(
         table__area__venue=venue,
         is_active=True,
@@ -172,13 +140,7 @@ def busy_table_ids(venue, starts_at, ends_at, exclude_reservation=None):
 
 
 def find_availability(venue, starts_at, ends_at, party_size, exclude_reservation=None):
-    """
-    Devuelve las ofertas viables ordenadas de menor a mayor desperdicio.
-
-    Primero mesas sueltas que encajan por si solas; despues combinaciones
-    declaradas. No inventa combinaciones: solo usa las que existen en
-    TableCombination.
-    """
+    # Solo combina mesas declaradas en TableCombination; nunca inventa juntas.
     busy = busy_table_ids(venue, starts_at, ends_at, exclude_reservation)
 
     free = list(
@@ -212,15 +174,10 @@ def find_availability(venue, starts_at, ends_at, party_size, exclude_reservation
                 )
             )
 
-    # Menos desperdicio primero; a igualdad, menos mesas involucradas.
     return sorted(offers, key=lambda o: (o.slack, len(o.tables)))
 
 
 def open_slots(venue, day, party_size, step_min=15):
-    """
-    Franjas en las que cabe un grupo ese dia. Alimenta el buscador del panel y
-    el formulario publico.
-    """
     tz = venue_tz(venue)
     duration = duration_for(venue, party_size)
     slots = []
@@ -243,11 +200,6 @@ def open_slots(venue, day, party_size, step_min=15):
     return slots
 
 
-# ---------------------------------------------------------------------------
-# Escrituras
-# ---------------------------------------------------------------------------
-
-
 def _log_event(reservation, user, from_status, to_status, comment=""):
     ReservationEvent.objects.create(
         reservation=reservation,
@@ -258,8 +210,7 @@ def _log_event(reservation, user, from_status, to_status, comment=""):
     )
 
 
-def get_or_create_guest(phone, name, email="", user=None):
-    """El telefono normalizado es la llave: evita fichas duplicadas."""
+def get_or_create_guest(phone, name, email=""):
     number = normalize_phone(phone)
     guest, created = Guest.objects.get_or_create(
         phone=number, defaults={"name": name, "email": email}
@@ -273,6 +224,32 @@ def get_or_create_guest(phone, name, email="", user=None):
     return guest
 
 
+@dataclass(frozen=True)
+class ReservationDetails:
+    children: int = 0
+    high_chairs: int = 0
+    occasion: str = ""
+    guest_notes: str = ""
+    internal_notes: str = ""
+
+
+def _pick_tables(venue, starts_at, ends_at, party_size, tables):
+    if tables is None:
+        offers = find_availability(venue, starts_at, ends_at, party_size)
+        if not offers:
+            raise NoAvailability(f"No hay mesa para {party_size} personas a esa hora.")
+        return list(offers[0].tables)
+
+    tables = list(tables)
+    capacity = sum(t.max_seats for t in tables)
+    if capacity < party_size:
+        raise ReservationError(
+            f"Las mesas elegidas suman {capacity} plazas y el grupo es de "
+            f"{party_size}."
+        )
+    return tables
+
+
 @transaction.atomic
 def create_reservation(
     *,
@@ -283,21 +260,11 @@ def create_reservation(
     source=Reservation.Source.WEB,
     tables=None,
     duration_min=None,
-    children=0,
-    high_chairs=0,
-    occasion="",
-    guest_notes="",
-    internal_notes="",
+    details=None,
     user=None,
     status=None,
 ):
-    """
-    Crea la reserva y sus ocupaciones en una sola transaccion.
-
-    Si no se pasan mesas, elige la mejor oferta disponible. Si Postgres
-    rechaza el solapamiento (dos hosts reservando a la vez), se traduce a un
-    error de negocio legible en lugar de un 500.
-    """
+    details = details or ReservationDetails()
     policy = policy_for(venue)
 
     if source == Reservation.Source.WEB and party_size > policy.max_party_web:
@@ -311,25 +278,12 @@ def create_reservation(
 
     validate_lead_time(venue, starts_at, source)
     if source == Reservation.Source.WALK_IN:
-        # Quien ya esta en la puerta no pasa por turnos ni ultima entrada:
-        # si el anfitrion lo sienta, es su decision.
+        # Walk-in se salta turnos y ultima entrada: decide el anfitrion.
         shift = shift_for(venue, starts_at)
     else:
-        shift = validate_calendar(venue, starts_at, ends_at)
+        shift = validate_calendar(venue, starts_at)
 
-    if tables is None:
-        offers = find_availability(venue, starts_at, ends_at, party_size)
-        if not offers:
-            raise NoAvailability(f"No hay mesa para {party_size} personas a esa hora.")
-        tables = list(offers[0].tables)
-    else:
-        tables = list(tables)
-        capacity = sum(t.max_seats for t in tables)
-        if capacity < party_size:
-            raise ReservationError(
-                f"Las mesas elegidas suman {capacity} plazas y el grupo es de "
-                f"{party_size}."
-            )
+    tables = _pick_tables(venue, starts_at, ends_at, party_size, tables)
 
     if status is None:
         status = (
@@ -347,13 +301,13 @@ def create_reservation(
         service_date=service_date_for(venue, starts_at),
         duration_min=duration,
         party_size=party_size,
-        children=children,
-        high_chairs=high_chairs,
+        children=details.children,
+        high_chairs=details.high_chairs,
         status=status,
         source=source,
-        occasion=occasion,
-        guest_notes=guest_notes,
-        internal_notes=internal_notes,
+        occasion=details.occasion,
+        guest_notes=details.guest_notes,
+        internal_notes=details.internal_notes,
         created_by=user,
     )
     if status == Reservation.Status.CONFIRMED:
@@ -362,12 +316,14 @@ def create_reservation(
 
     _assign(reservation, tables)
     _log_event(reservation, user, "", status, "Reserva creada")
+    if status == Reservation.Status.CONFIRMED:
+        notifications.notify_confirmed(reservation)
     logger.info("Reserva %s creada en %s", reservation.code, reservation.table_codes)
     return reservation
 
 
 def _assign(reservation, tables):
-    """Crea las ocupaciones. Traduce el choque de Postgres a un error legible."""
+    # El constraint de Postgres atrapa la carrera entre dos hosts; se traduce a error legible.
     try:
         with transaction.atomic():
             TableOccupancy.objects.bulk_create(
@@ -393,7 +349,6 @@ def _assign(reservation, tables):
 
 @transaction.atomic
 def assign_tables(reservation, tables, user=None):
-    """Reasigna la reserva a otras mesas sin perder el rastro."""
     reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
     reservation.occupancies.update(is_active=False)
     _assign(reservation, list(tables))
@@ -404,13 +359,12 @@ def assign_tables(reservation, tables, user=None):
 
 @transaction.atomic
 def move(reservation, new_start, user=None, tables=None):
-    """Cambia la hora (y opcionalmente las mesas) revalidando todo."""
     reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
     if not reservation.is_live:
         raise InvalidTransition("Solo se puede mover una reserva viva.")
 
     new_end = new_start + timedelta(minutes=reservation.duration_min)
-    shift = validate_calendar(reservation.venue, new_start, new_end)
+    shift = validate_calendar(reservation.venue, new_start)
 
     if tables is None:
         current = list(reservation.tables)
@@ -458,7 +412,6 @@ def _transition(reservation, new_status, user, comment="", extra_fields=None):
         fields.append(field)
     reservation.save(update_fields=fields)
 
-    # Los estados muertos liberan el rango de inmediato.
     if new_status not in Reservation.LIVE_STATUSES:
         reservation.occupancies.update(is_active=False)
 
@@ -469,8 +422,10 @@ def _transition(reservation, new_status, user, comment="", extra_fields=None):
 @transaction.atomic
 def confirm(reservation, user=None):
     reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
-    return _transition(reservation, Reservation.Status.CONFIRMED, user,
-                       extra_fields={"confirmed_at": timezone.now()})
+    reservation = _transition(reservation, Reservation.Status.CONFIRMED, user,
+                              extra_fields={"confirmed_at": timezone.now()})
+    notifications.notify_confirmed(reservation)
+    return reservation
 
 
 @transaction.atomic
@@ -498,6 +453,7 @@ def cancel(reservation, reason="", user=None):
                       "cancellation_reason": reason[:120]},
     )
     reservation.guest.refresh_counters()
+    notifications.notify_cancelled(reservation)
     return reservation
 
 
@@ -512,7 +468,6 @@ def mark_no_show(reservation, user=None):
 
 @transaction.atomic
 def block_table(table, starts_at, ends_at, reason, user=None):
-    """Saca una mesa de servicio. Compite por el mismo espacio que una reserva."""
     try:
         return TableOccupancy.objects.create(
             table=table, reservation=None, starts_at=starts_at, ends_at=ends_at,
@@ -527,12 +482,6 @@ def block_table(table, starts_at, ends_at, reason, user=None):
 
 
 def sweep_no_shows(venue, now=None):
-    """
-    Marca como no-show las reservas cuya gracia ya vencio.
-
-    Pensada para una tarea periodica (cron, Celery beat o el management
-    command sweep_no_shows llamado cada cinco minutos).
-    """
     now = now or timezone.now()
     cutoff = now - timedelta(minutes=policy_for(venue).no_show_grace_min)
 
@@ -553,16 +502,10 @@ def sweep_no_shows(venue, now=None):
     return marked
 
 
-# ---------------------------------------------------------------------------
-# Clientes sin reserva (walk-in)
-# ---------------------------------------------------------------------------
-
-#: Ficha compartida para quien llega sin reserva y no deja sus datos.
+# Ficha compartida para walk-ins que no dejan sus datos.
 WALK_IN_PHONE = "+000000000"
 WALK_IN_NAME = "Cliente de paso"
 
-#: Por debajo de esto no merece la pena sentar a nadie antes de la siguiente
-#: reserva de la mesa.
 MIN_WALK_IN_MIN = 30
 
 
@@ -575,17 +518,7 @@ def walk_in_guest():
 
 @transaction.atomic
 def seat_walk_in(venue, table, party_size, name="", phone="", user=None, now=None):
-    """
-    Sienta en el acto a quien llega sin reserva.
-
-    Crea una reserva de origen "walk-in" ya sentada en esa mesa desde ahora.
-    Asi la mesa queda ocupada para todos: el plano, la lista del dia y, sobre
-    todo, la web, que deja de ofrecerla.
-
-    Si la mesa tiene una reserva mas tarde, la ocupacion se corta a esa hora
-    (y se avisa en el mensaje de vuelta); si falta menos de MIN_WALK_IN_MIN,
-    no se sienta.
-    """
+    """Crea una reserva ya sentada para que la web deje de ofrecer la mesa; se corta antes de la siguiente reserva."""
     now = (now or timezone.now()).replace(second=0, microsecond=0)
     if party_size < 1:
         raise ReservationError("Indica cuántas personas son.")
@@ -623,7 +556,7 @@ def seat_walk_in(venue, table, party_size, name="", phone="", user=None, now=Non
         venue=venue, guest=guest, starts_at=now, party_size=party_size,
         source=Reservation.Source.WALK_IN, tables=[table], duration_min=duration,
         user=user, status=Reservation.Status.SEATED,
-        internal_notes=(name if name and not phone else ""),
+        details=ReservationDetails(internal_notes=(name if name and not phone else "")),
     )
     reservation.seated_at = now
     reservation.save(update_fields=["seated_at"])

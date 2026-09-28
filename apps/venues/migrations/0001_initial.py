@@ -5,6 +5,8 @@ import django.db.models.deletion
 import uuid
 from django.db import migrations, models
 
+VENUE_MODEL = 'venues.venue'
+
 
 class Migration(migrations.Migration):
 
@@ -73,7 +75,7 @@ class Migration(migrations.Migration):
                 ('max_seats', models.PositiveSmallIntegerField(verbose_name='capacidad maxima')),
                 ('is_active', models.BooleanField(default=True, verbose_name='activa')),
                 ('tables', models.ManyToManyField(related_name='combinations', to='venues.table', verbose_name='mesas')),
-                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='combinations', to='venues.venue', verbose_name='restaurante')),
+                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='combinations', to=VENUE_MODEL, verbose_name='restaurante')),
             ],
             options={
                 'verbose_name': 'combinación de mesas',
@@ -93,7 +95,7 @@ class Migration(migrations.Migration):
                 ('default_duration_min', models.PositiveSmallIntegerField(default=90, help_text='Cuánto dura una reserva de este turno si ningún tramo de la tabla de duraciones encaja con el grupo.', verbose_name='duración por defecto (min)')),
                 ('sort_order', models.PositiveSmallIntegerField(default=0, verbose_name='orden')),
                 ('is_active', models.BooleanField(default=True, verbose_name='activo')),
-                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='shifts', to='venues.venue', verbose_name='restaurante')),
+                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='shifts', to=VENUE_MODEL, verbose_name='restaurante')),
             ],
             options={
                 'verbose_name': 'turno',
@@ -108,7 +110,7 @@ class Migration(migrations.Migration):
                 ('min_party', models.PositiveSmallIntegerField(verbose_name='comensales desde')),
                 ('max_party', models.PositiveSmallIntegerField(verbose_name='comensales hasta')),
                 ('minutes', models.PositiveSmallIntegerField(verbose_name='cuánto ocupan la mesa (min)')),
-                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='duration_rules', to='venues.venue', verbose_name='restaurante')),
+                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='duration_rules', to=VENUE_MODEL, verbose_name='restaurante')),
             ],
             options={
                 'verbose_name': 'duración por tamaño de grupo',
@@ -127,7 +129,7 @@ class Migration(migrations.Migration):
                 ('end_time', models.TimeField(blank=True, null=True, verbose_name='hora de cierre')),
                 ('max_capacity', models.PositiveSmallIntegerField(blank=True, null=True, verbose_name='aforo maximo')),
                 ('reason', models.CharField(max_length=120, verbose_name='motivo')),
-                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='calendar_exceptions', to='venues.venue', verbose_name='restaurante')),
+                ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='calendar_exceptions', to=VENUE_MODEL, verbose_name='restaurante')),
             ],
             options={
                 'verbose_name': 'día especial',
@@ -138,7 +140,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='area',
             name='venue',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='areas', to='venues.venue', verbose_name='restaurante'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='areas', to=VENUE_MODEL, verbose_name='restaurante'),
         ),
         migrations.AddConstraint(
             model_name='table',

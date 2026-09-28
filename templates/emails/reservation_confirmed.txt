@@ -1,0 +1,18 @@
+{% autoescape off %}Hola {{ guest.name }},
+
+Tu reserva en {{ venue.name }} está confirmada.
+
+  Código:    {{ reservation.code }}
+  Fecha:     {{ day }}
+  Hora:      {{ time }}
+  Personas:  {{ people }}{% if reservation.occasion %}
+  Ocasión:   {{ reservation.occasion }}{% endif %}{% if reservation.guest_notes %}
+  Tus indicaciones: {{ reservation.guest_notes }}{% endif %}
+
+Si necesitas cambiarla o cancelarla, responde a este correo{% if venue.phone %} o llámanos al {{ venue.phone }}{% endif %}.
+
+¡Te esperamos!
+{{ venue.name }}{% if venue.address %}
+{{ venue.address }}{% endif %}{% if venue.phone %}
+{{ venue.phone }}{% endif %}
+{% endautoescape %}

@@ -7,6 +7,8 @@ import uuid
 from django.conf import settings
 from django.db import migrations, models
 
+RESERVATION_MODEL = 'reservations.reservation'
+
 
 class Migration(migrations.Migration):
 
@@ -66,7 +68,7 @@ class Migration(migrations.Migration):
                 ('to_status', models.CharField(max_length=12, verbose_name='estado nuevo')),
                 ('comment', models.CharField(blank=True, max_length=200, verbose_name='comentario')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='creado en')),
-                ('reservation', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='events', to='reservations.reservation', verbose_name='reserva')),
+                ('reservation', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='events', to=RESERVATION_MODEL, verbose_name='reserva')),
                 ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, verbose_name='usuario')),
             ],
             options={
@@ -103,7 +105,7 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(db_index=True, default=True, help_text='Se desmarca sola al cancelar, marcar no-show o cerrar la reserva. Solo las activas ocupan la mesa.', verbose_name='activa')),
                 ('block_reason', models.CharField(blank=True, max_length=120, verbose_name='motivo del bloqueo')),
                 ('assigned_at', models.DateTimeField(auto_now_add=True, verbose_name='asignada en')),
-                ('reservation', models.ForeignKey(blank=True, help_text='Déjalo vacío si es un bloqueo de mesa (mantenimiento, evento privado) y no una reserva.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='occupancies', to='reservations.reservation', verbose_name='reserva')),
+                ('reservation', models.ForeignKey(blank=True, help_text='Déjalo vacío si es un bloqueo de mesa (mantenimiento, evento privado) y no una reserva.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='occupancies', to=RESERVATION_MODEL, verbose_name='reserva')),
                 ('table', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='occupancies', to='venues.table', verbose_name='mesa')),
             ],
             options={
@@ -125,7 +127,7 @@ class Migration(migrations.Migration):
                 ('notified_at', models.DateTimeField(blank=True, null=True, verbose_name='avisado en')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='creada en')),
                 ('guest', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='waitlist_entries', to='guests.guest', verbose_name='cliente')),
-                ('resolved_with', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='from_waitlist', to='reservations.reservation', verbose_name='resuelta con')),
+                ('resolved_with', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='from_waitlist', to=RESERVATION_MODEL, verbose_name='resuelta con')),
                 ('venue', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='waitlist', to='venues.venue', verbose_name='restaurante')),
             ],
             options={

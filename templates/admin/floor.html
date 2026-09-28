@@ -1,12 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% comment %}
-Plano de sala y ocupacion por horas. Los datos llegan de wapp.floor.floor_view.
-
-Las mesas y la linea de tiempo se pintan en el servidor (se ven aunque falle
-el JS); Alpine solo abre el panel de detalle, sigue el raton por la linea de
-tiempo y maneja el modo de edicion, en el que las mesas se arrastran y se
-guardan todas juntas con un POST.
-{% endcomment %}
+{# Datos: wapp.floor.floor_view. Se pinta en el servidor (funciona sin JS); Alpine solo anade interaccion. #}
 
 {% block title %}Plano de sala | {{ site_title }}{% endblock %}
 
@@ -30,7 +23,6 @@ guardan todas juntas con un POST.
 
 <div x-data="zsFloor()" class="zs-floor" data-positions-url="{{ positions_url }}" data-csrf="{{ csrf_token }}" data-live="{{ is_now|yesno:'1,0' }}">
 
-    {# Cabecera: cuando y como esta la sala ------------------------------- #}
     <section class="zs-floor-top">
         <div class="zs-floor-heading">
             <p class="zs-floor-when{% if not is_now %} is-other{% endif %}">
@@ -71,11 +63,11 @@ guardan todas juntas con un POST.
         </div>
     </section>
 
-    {# Barra de tiempo ------------------------------------------------------ #}
     <div class="zs-floor-bar">
         <form method="get" class="zs-floor-time">
             {% if venues|length > 1 %}
-                <select name="local" class="zs-input" onchange="this.form.submit()" aria-label="Restaurante">
+                <label for="zs-floor-local" class="zs-sr">Restaurante</label>
+                <select id="zs-floor-local" name="local" class="zs-input" onchange="this.form.submit()">
                     {% for v in venues %}
                         <option value="{{ v.pk }}" {% if v.pk == venue.pk %}selected{% endif %}>{{ v.name }}</option>
                     {% endfor %}
@@ -88,8 +80,7 @@ guardan todas juntas con un POST.
                 <a href="{{ prev_url }}" title="30 minutos antes" aria-label="30 minutos antes">
                     <span class="material-symbols-outlined">chevron_left</span>
                 </a>
-                {# El campo de fecha va invisible encima del texto: se ve en espanol #}
-                {# y al tocarlo abre el calendario del navegador.                    #}
+                {# Campo de fecha invisible encima del texto: se lee en espanol y abre el calendario nativo. #}
                 <label class="zs-seg-field">
                     <span class="material-symbols-outlined">calendar_today</span>
                     <span>{{ date_label }}</span>
@@ -97,8 +88,9 @@ guardan todas juntas con un POST.
                            onclick="try { this.showPicker(); } catch (e) {}" onchange="this.form.submit()">
                 </label>
                 <label class="zs-seg-field">
-                    <span class="material-symbols-outlined">schedule</span>
-                    <select name="hora" aria-label="Hora" onchange="this.form.submit()">
+                    <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                    <span class="zs-sr">Hora</span>
+                    <select name="hora" onchange="this.form.submit()">
                         {% for h in time_options %}
                             <option value="{{ h }}"{% if h == time_selected %} selected{% endif %}>{{ h }}</option>
                         {% endfor %}
@@ -116,14 +108,14 @@ guardan todas juntas con un POST.
             {% endif %}
         </form>
 
-        <div class="zs-floor-legend" role="list" aria-label="Leyenda">
+        <ul class="zs-floor-legend" aria-label="Leyenda" style="list-style:none;margin:0;padding:0">
             {% for item in legend %}
-                <span class="zs-floor-key" role="listitem" data-empty="{{ item.count|yesno:'false,true' }}">
+                <li class="zs-floor-key" data-empty="{{ item.count|yesno:'false,true' }}">
                     <i class="zs-swatch" data-state="{{ item.key }}"></i>
                     {{ item.label }} <b>{{ item.count }}</b>
-                </span>
+                </li>
             {% endfor %}
-        </div>
+        </ul>
     </div>
 
     {% if unplaced %}
@@ -134,7 +126,6 @@ guardan todas juntas con un POST.
         </div>
     {% endif %}
 
-    {# Barra del modo edicion --------------------------------------------- #}
     <div class="zs-floor-editing" x-show="edit" x-cloak>
         <span class="material-symbols-outlined">open_with</span>
         <span>Arrastra las mesas a su sitio. Con una seleccionada, las flechas la mueven de a poco (Shift para ir más rápido).</span>
@@ -149,7 +140,6 @@ guardan todas juntas con un POST.
 
     <div class="zs-floor-grid">
 
-        {# Plano --------------------------------------------------------------- #}
         <div class="zs-card zs-plan-card">
             <div class="zs-card-head">
                 <h3><span class="material-symbols-outlined">table_restaurant</span> {{ venue.name }}</h3>
@@ -175,7 +165,6 @@ guardan todas juntas con un POST.
                         <button type="button" class="zs-ft" data-id="{{ t.pk }}"
                                 data-state="{{ t.state }}" data-shape="{{ t.shape }}"
                                 data-rx="{{ t.rx }}" data-ry="{{ t.ry }}" style="{{ t.style }}"
-                                aria-label="Mesa {{ t.code }}, {{ t.area.name }}: {{ t.hint }}"
                                 x-bind:class="{ 'is-selected': selId === '{{ t.pk }}' }"
                                 x-on:click="pick('{{ t.pk }}')"
                                 x-on:pointerdown="dragStart($event)"
@@ -184,7 +173,9 @@ guardan todas juntas con un POST.
                                 <i class="zs-chair{% if c.taken %} is-taken{% endif %}" style="{{ c.style }}" aria-hidden="true"></i>
                             {% endfor %}
                             <span class="zs-ft-top">
+                                <span class="zs-sr">Mesa</span>
                                 <b>{{ t.code }}</b>
+                                <span class="zs-sr">, {{ t.area.name }}:</span>
                                 <small>{{ t.hint }}</small>
                                 {% if t.state == "seated" %}<i class="zs-ft-progress" aria-hidden="true"></i>{% endif %}
                             </span>
@@ -195,9 +186,7 @@ guardan todas juntas con un POST.
             </div>
         </div>
 
-        {# Panel de detalle ------------------------------------------------- #}
         <aside class="zs-card zs-floor-panel" aria-live="polite">
-            {# Sin mesa elegida: lo que el anfitrion necesita de un vistazo. #}
             <template x-if="!sel">
                 <div class="zs-overview">
                     <div class="zs-panel-sec">
@@ -268,7 +257,7 @@ guardan todas juntas con un POST.
                                 </li>
                                 <li x-show="sel.now.phone">
                                     <span class="material-symbols-outlined">call</span>
-                                    <a x-bind:href="'tel:' + sel.now.phone" x-text="sel.now.phone"></a>
+                                    <a x-bind:href="'tel:' + sel.now.phone" x-text="sel.now.phone">Llamar</a>
                                 </li>
                                 <li x-show="sel.now.occasion">
                                     <span class="material-symbols-outlined">celebration</span>
@@ -305,8 +294,7 @@ guardan todas juntas con un POST.
                                 <b>Libre</b><span x-text="sel.next ? ' durante ' + sel.next.in : ' el resto del servicio'"></span>.
                             </p>
                             {% if is_now and can_walk_in %}
-                                {# Llega alguien sin reserva: se sienta aqui y la mesa #}
-                                {# deja de estar disponible tambien para la web.       #}
+                                {# Sin reserva: la mesa deja de estar disponible tambien para la web. #}
                                 <form method="post" action="{{ walk_in_url }}" class="zs-walkin">
                                     {% csrf_token %}
                                     <input type="hidden" name="table" x-bind:value="sel.id">
@@ -357,7 +345,7 @@ guardan todas juntas con un POST.
                                     <i class="zs-tl-dot" x-bind:data-tone="row.tone"></i>
                                     <span class="zs-panel-day-time" x-text="row.time"></span>
                                     <template x-if="row.url">
-                                        <a x-bind:href="row.url" x-text="row.label"></a>
+                                        <a x-bind:href="row.url" x-text="row.label">Ver reserva</a>
                                     </template>
                                     <template x-if="!row.url">
                                         <span x-text="row.label"></span>
@@ -371,7 +359,6 @@ guardan todas juntas con un POST.
         </aside>
     </div>
 
-    {# Ocupacion por horas ----------------------------------------------- #}
     <section class="zs-card zs-tl-card">
         <div class="zs-card-head">
             <h3><span class="material-symbols-outlined">view_timeline</span> Ocupación por horas</h3>
@@ -394,7 +381,6 @@ guardan todas juntas con un POST.
             <div class="zs-tl" style="--hour:{{ tl_hour_width|stringformat:'.4f' }}%;{% if tl_at is not None %}--at:{{ tl_at|stringformat:'.3f' }}%;{% endif %}{% if tl_now is not None %}--now:{{ tl_now|stringformat:'.3f' }}%;{% endif %}"
                  data-at="{% if tl_at is not None %}1{% else %}0{% endif %}" data-now="{% if tl_now is not None %}1{% else %}0{% endif %}">
 
-                {# Regla de horas #}
                 <div class="zs-tl-row zs-tl-row--head">
                     <div class="zs-tl-label"></div>
                     <div class="zs-tl-track zs-tl-ruler">
@@ -406,7 +392,6 @@ guardan todas juntas con un POST.
                     </div>
                 </div>
 
-                {# Tira de ocupacion: mesas ocupadas cada media hora #}
                 <div class="zs-tl-row zs-tl-row--heat">
                     <div class="zs-tl-label">
                         <b>Mesas</b><small>ocupadas</small>
@@ -504,7 +489,6 @@ function zsFloor() {
             if (this.edit && id) { this.selId = id; return; }
             this.selId = this.selId === id ? null : id;
             history.replaceState(null, "", this.selId ? "#" + this.selId : window.location.pathname + window.location.search);
-            // Desde la linea de tiempo: sube al plano para ver la mesa.
             if (scroll && this.selId) {
                 this.$refs.plan.scrollIntoView({ behavior: "smooth", block: "center" });
             } else if (this.selId && window.innerWidth <= 1100) {
@@ -516,10 +500,7 @@ function zsFloor() {
             }
         },
 
-        // --- Linea de tiempo ----------------------------------------------
-
-        // Minutos desde la apertura -> fecha y hora locales del local. Se
-        // calcula en UTC a proposito: la zona del navegador no importa.
+        // En UTC a proposito: la zona del navegador no importa.
         momentAt(e) {
             var r = e.currentTarget.getBoundingClientRect();
             var pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
@@ -545,13 +526,10 @@ function zsFloor() {
             window.location.href = "?" + q.toString() + (this.selId ? "#" + this.selId : "");
         },
 
-        // --- Edicion ------------------------------------------------------
-
         startEdit() {
             this.edit = true;
             this.moved = {};
-            // En vista normal el plano va recortado a las mesas; para editar se
-            // vuelve al lienzo completo, que es donde viven las coordenadas.
+            // Para editar se vuelve al lienzo completo, que es donde viven las coordenadas.
             this.$refs.plan.querySelectorAll(".zs-ft").forEach(function (el) {
                 el.style.left = el.dataset.rx + "%";
                 el.style.top = el.dataset.ry + "%";

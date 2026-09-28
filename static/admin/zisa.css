@@ -1,13 +1,4 @@
-/*
- * Zisa - capa propia sobre Unfold.
- *
- * Unfold trae un build parcial de Tailwind, asi que en vez de arriesgarnos a
- * usar clases que no esten compiladas, todo lo propio va aqui con nombres
- * `zs-`. Los neutros salen de las variables que Unfold inyecta a partir de
- * UNFOLD["COLORS"], asi que la paleta se cambia en un solo sitio.
- *
- * Unfold marca el modo oscuro con la clase `dark` en <html>.
- */
+/* Zisa: clases propias `zs-` (Unfold trae un build parcial de Tailwind). */
 
 /* ===================================================================== */
 /* Tokens                                                                */
@@ -28,11 +19,7 @@
   --zs-accent-wash: #f4f4f5;
   --zs-on-accent: #fff;
 
-  /*
-   * Colores de estado. Son los unicos con tinte propio ademas del azul: el
-   * estado de una reserva se tiene que reconocer de un vistazo, y en escala
-   * de grises todos los chips acaban pareciendo el mismo.
-   */
+  /* Estados con tinte propio: en grises todos los chips parecen iguales. */
   --zs-warn: #92400e;
   --zs-warn-bg: #fdf3dd;
   --zs-info: #1e40af;
@@ -78,12 +65,7 @@
   --zs-shadow: none;
 }
 
-/*
- * Modo oscuro de Unfold: sus botones usan bg-primary-600 + text-white en los
- * dos temas. Con el acento grafito eso seria negro sobre negro, asi que en
- * oscuro el 600 pasa a casi blanco y el texto encima a oscuro. html.dark gana
- * a la hoja :root que inyecta Unfold con los colores de settings.
- */
+/* Unfold usa bg-primary-600 + text-white en ambos temas: en oscuro seria negro sobre negro. */
 html.dark {
   --color-primary-600: oklch(96% 0 0);
   --color-primary-500: oklch(88% 0 0);
@@ -390,10 +372,6 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   padding-top: 4px;
 }
 
-/*
- * Portada. Fondo lavado en vez de filete: abre la pagina con algo de aire
- * en lugar de con otra caja mas.
- */
 /* Portada: sin caja de fondo, solo tipografia y un filete debajo. */
 .zs-hero {
   align-items: flex-end;
@@ -432,10 +410,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   gap: 9px;
 }
 
-/*
- * Titulos de bloque. En caja normal y con icono: la versalita apretada de
- * antes hacia que la pagina se leyera como un formulario oficial.
- */
+/* Titulos de bloque */
 .zs-section {
   align-items: center;
   color: var(--zs-ink);
@@ -482,10 +457,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   white-space: nowrap;
 }
 
-/*
- * Baldosas de cifras. Cada una es su propia tarjeta con sombra suave, en
- * vez de celdas separadas por lineas de un pixel.
- */
+/* Baldosas de cifras */
 
 .zs-tiles {
   display: grid;
@@ -679,8 +651,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   box-shadow: inset 3px 0 0 var(--zs-bad);
 }
 
-/* El nombre es el enlace; su ::after cubre la fila entera para que se
-   pueda pulsar en cualquier parte. */
+/* El ::after del enlace cubre la fila para que toda sea pulsable. */
 .zs-row-link {
   color: var(--zs-ink);
   display: block;
@@ -767,10 +738,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   font-variant-numeric: tabular-nums;
 }
 
-/*
- * Chips de estado: fondo suave con su color, siempre con texto. El estado
- * nunca se codifica solo con color.
- */
+/* Chips de estado: siempre con texto, nunca solo color. */
 
 .zs-chip {
   border-radius: 999px;
@@ -806,8 +774,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   color: var(--zs-muted);
 }
 
-/* Etiquetas de cliente: color elegido por el equipo, mezclado con la
-   superficie para que se lea igual en claro y en oscuro. */
+/* Color del equipo mezclado con la superficie: legible en claro y oscuro. */
 .zs-chip--tag {
   background: color-mix(in oklab, var(--tag) 14%, var(--zs-surface));
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tag) 35%, transparent);
@@ -1053,11 +1020,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 /* ===================================================================== */
 /* Barra lateral                                                         */
-/*                                                                       */
-/* Clara y sin color: misma superficie que la pagina, separada por un    */
-/* filete. El enlace activo se marca con un fondo gris y la tinta plena. */
-/* Unfold la pinta con utilidades de Tailwind, asi que hace falta        */
-/* !important para ganarles.                                             */
+/* !important: Unfold la pinta con utilidades de Tailwind.               */
 /* ===================================================================== */
 
 #nav-sidebar {
@@ -1067,6 +1030,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   --side-ink: #18181b;
   --side-soft: #52525b;
   --side-dim: #a1a1aa;
+  border-right: 1px solid var(--side-line) !important;
 }
 
 .dark #nav-sidebar {
@@ -1081,10 +1045,6 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 #nav-sidebar,
 #nav-sidebar-inner {
   background-color: var(--side-bg) !important;
-}
-
-#nav-sidebar {
-  border-right: 1px solid var(--side-line) !important;
 }
 
 #nav-sidebar [class*="border-base-200"],
@@ -1208,10 +1168,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 /* ===================================================================== */
 /* Sin translucidos                                                      */
-/*                                                                       */
-/* Unfold marca los estados bajando la opacidad del fondo (bg-.../80) y  */
-/* pone la barra de guardado semitransparente con desenfoque. Sobre el   */
-/* contenido eso se lee como un degradado. Aqui todo pasa a color solido. */
+/* Unfold usa fondos /80 y desenfoque: aqui todo pasa a color solido.    */
 /* ===================================================================== */
 
 [class*="hover:bg-primary-600/"]:hover {
@@ -1415,12 +1372,6 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 /* ===================================================================== */
 /* Formularios                                                           */
-/*                                                                       */
-/* Unfold deja los campos a 12px del borde de la tarjeta y las pestanas  */
-/* con 4px de separacion: con dos barras de pestanas seguidas se leen    */
-/* como un bloque unico. Aqui se abre esa caja. Como son utilidades de   */
-/* Tailwind, basta con ganarles en especificidad; no hace falta          */
-/* !important.                                                           */
 /* ===================================================================== */
 
 /* --- Barras de pestanas ---------------------------------------------- */
@@ -1444,8 +1395,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 /* --- Campos ----------------------------------------------------------- */
 
-/* 18px a los lados en vez de 12: dentro de una tarjeta con borde, el
-   texto a 12px se lee pegado. */
+/* 18px: a 12px el texto se lee pegado al borde de la tarjeta. */
 .form-rows .field-line {
   padding-inline: 18px;
 }
@@ -1459,8 +1409,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   padding-bottom: 16px;
 }
 
-/* La descripcion de un fieldset con pestana se dibuja dentro de la
-   tarjeta, asi que necesita el mismo margen que los campos. */
+/* Descripcion de fieldset con pestana: mismo margen que los campos. */
 .tab-wrapper > fieldset > div:not(.form-rows) {
   margin-bottom: 6px;
   padding: 4px 18px 0;
@@ -1722,6 +1671,19 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   opacity: 0.45;
 }
 
+/* Texto solo para lectores de pantalla. */
+.zs-sr {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .zs-alert--info {
   background: var(--zs-info-bg);
   color: var(--zs-info);
@@ -1758,8 +1720,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Debajo del plano el panel no se pega al hacer scroll ni reserva hueco
-     cuando no hay mesa elegida. */
+  /* Debajo del plano el panel no es sticky ni reserva hueco. */
   .zs-floor-panel {
     position: static;
   }
@@ -1784,15 +1745,13 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   padding-bottom: 12px;
 }
 
-/* En pantallas estrechas el plano no se encoge por debajo de lo legible:
-   se desplaza dentro de su tarjeta, la pagina no. */
+/* En pantallas estrechas el plano se desplaza dentro de su tarjeta, no la pagina. */
 .zs-plan-scroll {
   overflow-x: auto;
 }
 
 .zs-plan {
-  /* El alto lo calcula la vista para encuadrar las mesas; el ancho es el
-     de la tarjeta. */
+  /* El alto lo calcula la vista para encuadrar las mesas. */
   height: var(--plan-h, 480px);
   background-color: var(--fl-floor);
   min-width: 760px;
@@ -1826,10 +1785,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   font-size: 15px;
 }
 
-/*
- * Mesa. El boton es la caja completa (tablero + sillas); el tablero es
- * .zs-ft-top y las sillas se cuelgan alrededor con posicion absoluta.
- */
+/* Mesa: el boton es tablero + sillas; las sillas van en absoluto. */
 .zs-ft {
   --w: 74px;
   --h: 74px;
@@ -2021,8 +1977,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   height: auto;
 }
 
-/* Las mesas se colocan en % de este area; el margen alrededor es fijo en px
-   (PLAN_INSET en wapp/floor.py) para que quepan sillas y etiquetas. */
+/* Mesas en %; margen fijo en px (PLAN_INSET en wapp/floor.py) para sillas y etiquetas. */
 .zs-plan-inner {
   inset: 104px 112px 76px;
   position: absolute;
@@ -2602,8 +2557,7 @@ button.zs-tl-label:hover {
   }
 }
 
-/* En la tira de ocupacion la franja actual ya va resaltada: la linea de la
-   hora solo taparia su numero. */
+/* En la tira la franja actual ya va resaltada: la linea taparia su numero. */
 .zs-tl[data-at] .zs-tl-heat::after,
 .zs-tl[data-now] .zs-tl-heat::before {
   display: none;
@@ -2627,9 +2581,7 @@ button.zs-tl-label:hover {
 /* Login (templates/unfold/layouts/unauthenticated.html)                 */
 /* ===================================================================== */
 
-/* Alto fijo al de la pantalla (dvh descuenta las barras del navegador en
-   movil). Si el formulario no cabe, se desplaza solo su columna: la pagina
-   y la foto nunca pasan del borde inferior. */
+/* Alto fijo (dvh): si no cabe, solo se desplaza la columna del formulario. */
 .zs-login {
   background: var(--zs-surface);
   display: grid;

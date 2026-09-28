@@ -1,12 +1,4 @@
-"""
-Llena el servicio de hoy con reservas de ejemplo para ver el panel con datos.
-
-    python manage.py seed_demo_day
-    python manage.py seed_demo_day --clear   # borra las de ejemplo y sale
-
-Solo toca reservas cuyas notas internas llevan la marca DEMO_TAG, asi que
-nunca se lleva por delante datos reales.
-"""
+"""Reservas de ejemplo para hoy. Solo toca las marcadas con DEMO_TAG en notas internas."""
 
 from datetime import datetime, time, timedelta
 
@@ -70,13 +62,14 @@ class Command(BaseCommand):
             guest = services.get_or_create_guest(phone, name)
             starts_at = datetime.combine(today, at, tzinfo=tz)
             try:
-                # Se crean como alta de personal para no chocar con la ventana
-                # de antelacion de la web, y despues se marca el origen real:
-                # son datos de ejemplo, no reservas que entraron por ese canal.
+                # Como STAFF para saltar la antelacion web; el origen se cambia despues.
                 reservation = services.create_reservation(
                     venue=venue, guest=guest, starts_at=starts_at, party_size=party,
-                    source=Reservation.Source.STAFF, occasion=occasion,
-                    internal_notes=f"{DEMO_TAG} generada por seed_demo_day",
+                    source=Reservation.Source.STAFF,
+                    details=services.ReservationDetails(
+                        occasion=occasion,
+                        internal_notes=f"{DEMO_TAG} generada por seed_demo_day",
+                    ),
                 )
             except services.ReservationError as exc:
                 skipped.append(f"{name} {at:%H:%M}: {exc}")
