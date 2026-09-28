@@ -50,6 +50,7 @@ def _context(reservation):
         "reservation": reservation,
         "guest": reservation.guest,
         "venue": venue,
+        "logo_src": settings.EMAIL_LOGO_URL or "cid:logo",
         "day": date_format(local, "l j \\d\\e F \\d\\e Y"), 
         "time": f"{local:%H:%M}",
         "people": (f"{reservation.party_size} "
@@ -94,7 +95,8 @@ def send(reservation_pk, template):
         reply_to=[settings.DEFAULT_FROM_EMAIL],
     )
     message.attach_alternative(render_to_string(f"{base}.html", context), "text/html")
-    _attach_logo(message)
+    if not settings.EMAIL_LOGO_URL:
+        _attach_logo(message)
 
     notification.recipient = recipient
     notification.attempts += 1

@@ -147,8 +147,10 @@ CRON_TOKEN = env("CRON_TOKEN", "")
 
 
 # ---------------------------------------------------------------------------
-# Correo (sin EMAIL_HOST, los correos van a la consola)
+# Correo: Brevo si hay BREVO_API_KEY, si no SMTP; sin EMAIL_HOST, a la consola
 # ---------------------------------------------------------------------------
+
+BREVO_API_KEY = env("BREVO_API_KEY", "")
 
 EMAIL_HOST = env("EMAIL_HOST", "")
 EMAIL_PORT = int(env("EMAIL_PORT", "587"))
@@ -159,11 +161,20 @@ EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
 EMAIL_TIMEOUT = 15
 EMAIL_BACKEND = env(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+    "anymail.backends.brevo.EmailBackend" if BREVO_API_KEY
+    else "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
     else "django.core.mail.backends.console.EmailBackend",
 )
+ANYMAIL = {"BREVO_API_KEY": BREVO_API_KEY}
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Zisa <digital@zisa.pe>")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Brevo no admite imagenes en linea: el logo va por URL publica.
+EMAIL_LOGO_URL = env(
+    "EMAIL_LOGO_URL",
+    f"https://{RENDER_EXTERNAL_HOSTNAME}/static/admin/img/zisa-logo.png"
+    if RENDER_EXTERNAL_HOSTNAME else "",
+)
 
 
 # ---------------------------------------------------------------------------
