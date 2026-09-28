@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group, User
+from django.contrib.auth.forms import ReadOnlyPasswordHashWidget
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
@@ -11,9 +14,32 @@ admin.site.unregister(User)
 admin.site.unregister(Group)
 
 
+class HiddenPasswordWidget(ReadOnlyPasswordHashWidget):
+    """Oculta algoritmo, sal y hash: no sirven de nada en el panel."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        usable = bool(value) and not value.startswith("!")
+        return format_html(
+            '<div class="readonly bg-base-50 border border-base-200 font-medium '
+            'max-w-2xl px-3 py-2 rounded-default shadow-xs dark:bg-white/[.02] '
+            'dark:border-base-700">{}</div>',
+            "••••••••••" if usable else "Sin contraseña",
+        )
+
+
+class ZisaUserChangeForm(UserChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["password"].widget = HiddenPasswordWidget()
+        self.fields["password"].help_text = mark_safe(
+            '<a href="../password/" class="text-primary-600 dark:text-primary-500">'
+            "Cambiar contraseña</a>"
+        )
+
+
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
-    form = UserChangeForm
+    form = ZisaUserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "first_name", "last_name", "email", "is_active",

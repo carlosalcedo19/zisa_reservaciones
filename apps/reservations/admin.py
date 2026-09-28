@@ -631,5 +631,20 @@ class ReservationPolicyAdmin(ModelAdmin):
     )
 
     def has_add_permission(self, request):
-        # Una politica por restaurante; se crea sola con get_or_create.
-        return False
+        # Una por restaurante: solo mientras quede alguno sin reglas.
+        return (request.user.is_superuser
+                and Venue.objects.filter(policy__isnull=True).exists())
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "venue":
+            kwargs["queryset"] = Venue.objects.filter(policy__isnull=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_readonly_fields(self, request, obj=None):
+        return ("venue",) if obj else ()

@@ -533,3 +533,45 @@ class UsuariosTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(User.objects.get(username="anfitriona").check_password(clave))
+
+    def test_la_ficha_no_muestra_el_hash_de_la_clave(self):
+        admin_user = User.objects.create_superuser("jefe2", password=secrets.token_urlsafe())
+        self.client.force_login(admin_user)
+        html = self.client.get(reverse("admin:auth_user_change", args=[admin_user.pk])).content.decode()
+        self.assertNotIn("pbkdf2", html)
+        self.assertIn("Cambiar contraseña", html)
+
+
+class ReglasDeReservaTests(TestCase):
+    def setUp(self):
+        self.venue = Venue.objects.create(name="Zisa", timezone="America/Lima")
+        self.jefe = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
+
+    def _datos(self, **extra):
+        return {"min_lead_hours": 3, "max_lead_days": 30, "max_party_web": 6,
+                "web_auto_confirm": "on", "no_show_grace_min": 20,
+                "overbooking_pct": 0, "default_duration_min": 90, **extra}
+
+    def test_el_superadmin_crea_las_reglas_si_el_local_no_tiene(self):
+        self.client.force_login(self.jefe)
+        response = self.client.post(reverse("admin:reservations_reservationpolicy_add"),
+                                    self._datos(venue=self.venue.pk))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.venue.policy.max_party_web, 6)
+
+    def test_el_superadmin_las_edita(self):
+        policy = services.policy_for(self.venue)
+        self.client.force_login(self.jefe)
+        url = reverse("admin:reservations_reservationpolicy_change", args=[policy.pk])
+        self.assertEqual(self.client.post(url, self._datos()).status_code, 302)
+        policy.refresh_from_db()
+        self.assertEqual(policy.min_lead_hours, 3)
+
+    def test_el_resto_del_equipo_solo_las_ve(self):
+        policy = services.policy_for(self.venue)
+        self.client.force_login(_staff("gerente", "view_reservationpolicy",
+                                       "change_reservationpolicy"))
+        url = reverse("admin:reservations_reservationpolicy_change", args=[policy.pk])
+        self.client.post(url, self._datos())
+        policy.refresh_from_db()
+        self.assertEqual(policy.min_lead_hours, 2)
