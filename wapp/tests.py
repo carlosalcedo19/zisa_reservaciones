@@ -652,6 +652,17 @@ class UsuariosTests(TestCase):
         self.assertIn("Cambiar contraseña", html)
 
 
+class BuscadoresTests(TestCase):
+    def test_el_navegador_no_autocompleta_los_buscadores(self):
+        self.client.force_login(User.objects.create_superuser(
+            "jefe", password=secrets.token_urlsafe()))
+        html = self.client.get(reverse("admin:guests_guest_changelist")).content.decode()
+        lista = html.index('id="searchbar"')
+        self.assertIn('autocomplete="off"', html[lista - 600:lista])
+        menu = html.index('id="nav-filter"')
+        self.assertIn('autocomplete="off"', html[menu:menu + 80])
+
+
 class ReglasDeReservaTests(TestCase):
     def setUp(self):
         self.venue = Venue.objects.create(name="Zisa", timezone="America/Lima")
