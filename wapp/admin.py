@@ -27,6 +27,28 @@ class HiddenPasswordWidget(ReadOnlyPasswordHashWidget):
         )
 
 
+PERM_VERBS = {"add": "Puede añadir", "change": "Puede modificar",
+              "delete": "Puede borrar", "view": "Puede ver"}
+
+
+def permission_label(perm):
+    """Los nombres de permiso se guardan en ingles al migrar ("Can add ..."): se rehacen aqui."""
+    model = perm.content_type.model_class()
+    accion = perm.codename.split("_", 1)[0]
+    if model is None or accion not in PERM_VERBS:
+        return str(perm)
+    meta = model._meta
+    return f"{meta.app_config.verbose_name} | {PERM_VERBS[accion]} {meta.verbose_name}"
+
+
+class PermisosEnEspanol:
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        field = super().formfield_for_manytomany(db_field, request, **kwargs)
+        if db_field.name in ("permissions", "user_permissions"):
+            field.label_from_instance = permission_label
+        return field
+
+
 class ZisaUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -38,7 +60,7 @@ class ZisaUserChangeForm(UserChangeForm):
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin, ModelAdmin):
+class UserAdmin(PermisosEnEspanol, BaseUserAdmin, ModelAdmin):
     form = ZisaUserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
@@ -48,5 +70,5 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 
 
 @admin.register(Group)
-class GroupAdmin(BaseGroupAdmin, ModelAdmin):
+class GroupAdmin(PermisosEnEspanol, BaseGroupAdmin, ModelAdmin):
     pass

@@ -197,6 +197,8 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "es-pe"
 # Sin esto, LocaleMiddleware usa el idioma del navegador (ingles a algunos).
 LANGUAGES = [("es", "Español")]
+# Unfold no trae traduccion al espanol: sus textos estan en locale/es.
+LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = env("TIME_ZONE", "America/Lima")
 USE_I18N = True
 USE_TZ = True

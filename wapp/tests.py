@@ -91,8 +91,21 @@ class PlanoBase(BaseSalaTestCase):
     def dia(self):
         return self.cena().date()
 
-    def plano_de_la_cena(self):
-        return self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA)
+    def plano_de_la_cena(self, **params):
+        return self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA, **params)
+
+    def cena_por_zona(self):
+        """Cada espacio tiene su propio plano: una respuesta por zona."""
+        primera = self.plano_de_la_cena()
+        return {z["name"]: (primera if z["is_on"] else self.plano_de_la_cena(zona=z["id"]))
+                for z in primera.context["zones"]}
+
+    def de_todas_las_zonas(self, clave):
+        juntas = {}
+        for r in self.cena_por_zona().values():
+            valor = r.context[clave]
+            juntas.update(valor if isinstance(valor, dict) else {t.code: t for t in valor})
+        return juntas
 
 
 class PlanoEstadosTests(PlanoBase):
@@ -131,14 +144,14 @@ class PlanoEstadosTests(PlanoBase):
     def test_cada_mesa_tiene_su_estado(self):
         r = self.plano_de_la_cena()
         self.assertEqual(r.status_code, 200)
-        fichas = r.context[TABLES_JSON]
-        estados = {f["code"]: f["state"] for f in fichas.values()}
+        estados = {f["code"]: f["state"] for f in self.de_todas_las_zonas(TABLES_JSON).values()}
         self.assertEqual(estados, {
             "S1": "seated", "S2": "waiting", "S3": "late", "T1": "seated",
             "P1": "soon", "P2": "free", "B1": "blocked",
         })
+        # Sin zona elegida se abre la primera, el salon, con sus cifras.
         self.assertEqual(r.context["stats"], {
-            "free": 2, "total": 7, "people": 5, "arriving": 1, "late": 1,
+            "free": 0, "total": 3, "people": 3, "arriving": 0, "late": 1,
         })
         self.assertFalse(r.context[IS_NOW])
         self.assertEqual(r.context[TIME_SELECTED], HORA_CENA)
@@ -147,8 +160,7 @@ class PlanoEstadosTests(PlanoBase):
         self.assertIsNotNone(r.context["tl_at"])
 
     def test_fichas_del_panel_lateral(self):
-        r = self.plano_de_la_cena()
-        fichas = {f["code"]: f for f in r.context[TABLES_JSON].values()}
+        fichas = {f["code"]: f for f in self.de_todas_las_zonas(TABLES_JSON).values()}
 
         self.assertEqual(fichas["B1"]["now"]["kind"], "block")
         self.assertEqual(fichas["B1"]["now"]["range"], "20:00 - 22:00")
@@ -165,8 +177,7 @@ class PlanoEstadosTests(PlanoBase):
         self.assertEqual(dia_t1, ["17:00–18:30"])
 
     def test_dibujo_de_las_mesas(self):
-        r = self.plano_de_la_cena()
-        mesas = {t.code: t for t in r.context[TABLES]}
+        mesas = self.de_todas_las_zonas(TABLES)
         self.assertEqual(mesas["S3"].shape, "long")
         self.assertEqual(mesas["S1"].shape, "square")
         self.assertEqual(mesas["T1"].shape, "round")
@@ -184,19 +195,25 @@ class PlanoEstadosTests(PlanoBase):
 
     def test_zonas_con_su_icono(self):
         r = self.plano_de_la_cena()
-        iconos = {a["name"]: a["icon"] for a in r.context[AREAS]}
+        iconos = {z["name"]: z["icon"] for z in r.context["zones"]}
         self.assertEqual(iconos, {"Salon": "restaurant", "Terraza": "deck",
                                   "Privado": "meeting_room", "Barra": "local_bar"})
-        self.assertTrue(all("left:calc(" in a["style"] for a in r.context[AREAS]))
         self.assertEqual(r.context["unplaced"], 0)
 
+    def test_se_ve_donde_se_coloco(self):
+        """Sin editar, cada mesa sale en las mismas coordenadas que al editarla."""
+        mesas = self.de_todas_las_zonas(TABLES)
+        self.assertTrue(mesas["S1"].style.startswith("left:10.00%;top:10.00%;"))
+        self.assertTrue(mesas["T1"].style.startswith("left:80.00%;top:20.00%;"))
+
     def test_quien_llega_y_que_mesa_se_libera(self):
-        r = self.plano_de_la_cena()
-        llegadas = r.context["arrivals"]
-        self.assertEqual([a["when"] for a in llegadas], ["+45 min", "ahora", "en 30 min"])
-        self.assertEqual([a[TABLES] for a in llegadas], ["S3", "S2", "P1"])
+        planos = self.cena_por_zona()
+        llegadas = planos["Salon"].context["arrivals"]
+        self.assertEqual([a["when"] for a in llegadas], ["+45 min", "ahora"])
+        self.assertEqual([a[TABLES] for a in llegadas], ["S3", "S2"])
         self.assertTrue(llegadas[0]["late"])
-        libera = r.context["freeing"]
+        self.assertEqual([a[TABLES] for a in planos["Privado"].context["arrivals"]], ["P1"])
+        libera = planos["Terraza"].context["freeing"]
         self.assertEqual([(f[TABLES], f["in"]) for f in libera], [("T1", "15 min")])
 
     def test_ocupacion_por_franjas(self):
@@ -204,8 +221,8 @@ class PlanoEstadosTests(PlanoBase):
         franjas = {s["label"]: s for s in r.context["tl_slots"]}
         self.assertEqual(len(franjas), 8)
         self.assertTrue(franjas[OCHO]["is_at"])
-        self.assertEqual(franjas[OCHO][TABLES], 4)  # S1, S2, S3 y T1
-        self.assertEqual(r.context["tl_peak"][TABLES], 4)
+        self.assertEqual(franjas[OCHO][TABLES], 3)  # S1, S2 y S3: solo el salon
+        self.assertEqual(r.context["tl_peak"][TABLES], 3)
         self.assertEqual(franjas[OCHO]["bar_px"], floor.HEAT_PX)
         self.assertEqual([h["label"] for h in r.context["tl_hours"]],
                          ["19", "20", "21", "22", "23"])
@@ -221,9 +238,7 @@ class PlanoEstadosTests(PlanoBase):
     def test_mesas_sin_colocar(self):
         Table.objects.update(pos_x=0, pos_y=0)
         r = self.plano_de_la_cena()
-        self.assertEqual(r.context["unplaced"], 7)
-        alto = 210 + floor.PLAN_INSET["top"] + floor.PLAN_INSET["bottom"]
-        self.assertEqual(r.context["plan_height"], alto)
+        self.assertEqual(r.context["unplaced"], 3)
 
 
 class PlanoAhoraTests(PlanoBase):
@@ -276,7 +291,7 @@ class PlanoLocalesTests(BaseSalaTestCase):
         r = self.pedir(anexo)
         self.assertEqual(r.context[VENUE], anexo)
         self.assertEqual(r.context[TL_RANGE], "20:00 – 22:00")
-        self.assertEqual(r.context[AREAS][0]["icon"], "deck")
+        self.assertEqual(r.context["tl_areas"][0]["icon"], "deck")
         self.assertEqual(r.context[TABLES_JSON][str(mesa.pk)]["state"], "blocked")
 
     def test_local_sin_mesas_ni_turnos(self):
@@ -284,8 +299,7 @@ class PlanoLocalesTests(BaseSalaTestCase):
         r = self.pedir(vacio)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.context[TL_RANGE], "12:00 – 00:00")
-        self.assertEqual(r.context["plan_height"], 480)
-        self.assertEqual(r.context[AREAS], [])
+        self.assertEqual(r.context[TABLES], [])
         self.assertFalse(r.context["tl_has_data"])
 
     def test_sin_locales_activos(self):
@@ -315,12 +329,13 @@ class PlanoZonasTests(PlanoBase):
                 party_size=2, source=Reservation.Source.STAFF, tables=[mesa],
             )
 
-    def test_pestanas_con_cuantas_mesas_hay(self):
+    def test_sin_zona_abre_la_primera(self):
         r = self.plano_de_la_cena()
         zonas = {z["name"]: z["count"] for z in r.context["zones"]}
         self.assertEqual(zonas, {"Salon": 3, "Terraza": 1, "Privado": 2, "Barra": 1})
-        self.assertEqual(r.context["zone"], "")
-        self.assertEqual(r.context["all_tables"], 7)
+        self.assertEqual(r.context["zone"], str(self.area.pk))
+        self.assertEqual({t.code for t in r.context[TABLES]}, {"S1", "S2", "S3"})
+        self.assertNotContains(r, "Todas")
         self.assertTrue(all(f"hora={HORA_CENA.replace(':', '%3A')}" in z["url"]
                             for z in r.context["zones"]))
 
@@ -329,7 +344,7 @@ class PlanoZonasTests(PlanoBase):
         r = self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA, zona=privado)
         self.assertEqual(r.context["zone"], str(privado))
         self.assertEqual({t.code for t in r.context[TABLES]}, {"P1", "P2"})
-        self.assertEqual([a["name"] for a in r.context[AREAS]], ["Privado"])
+        self.assertEqual([a["name"] for a in r.context["tl_areas"]], ["Privado"])
         self.assertEqual(r.context["stats"]["total"], 2)
         self.assertEqual([a[TABLES] for a in r.context["arrivals"]], ["P1"])
         self.assertIn(f"zona={privado}", r.context["prev_url"])
@@ -337,26 +352,10 @@ class PlanoZonasTests(PlanoBase):
         self.assertEqual(r.context["tl_window"]["zona"], str(privado))
         self.assertContains(r, f'name="zona" value="{privado}"')
 
-    def test_zona_desconocida_muestra_todas(self):
+    def test_zona_desconocida_abre_la_primera(self):
         r = self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA, zona="no-existe")
-        self.assertEqual(r.context["zone"], "")
-        self.assertEqual(len(r.context[TABLES]), 7)
-
-
-class PlanoAltoTests(BaseSalaTestCase):
-    def test_filas_apretadas_estiran_el_plano(self):
-        Table.objects.all().delete()
-        for fila in range(8):
-            for col in range(3):
-                Table.objects.create(area=self.area, code=f"M{fila}{col}", min_seats=2,
-                                     max_seats=4, pos_x=10 + col * 40, pos_y=5 + fila * 12)
-        mesas = list(Table.objects.select_related("area"))
-        for t in mesas:
-            floor._draw_table(t, "free", 0, None, None)
-        alto, _ = floor._layout(mesas)
-        base = floor.PLAN_MAX_H + floor.PLAN_INSET["top"] + floor.PLAN_INSET["bottom"]
-        self.assertGreater(alto, base)
-        self.assertLessEqual(alto - base, floor.PLAN_CROWDED_MAX_H - floor.PLAN_MAX_H)
+        self.assertEqual(r.context["zone"], str(self.area.pk))
+        self.assertEqual(len(r.context[TABLES]), 3)
 
 
 class PlanoPosicionesTests(BaseSalaTestCase):

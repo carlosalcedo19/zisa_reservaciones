@@ -1746,13 +1746,32 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   padding-bottom: 12px;
 }
 
+/* Cabecera del plano: nombre y zonas a la izquierda, edicion a la derecha. */
+.zs-plan-head {
+  gap: 10px 16px;
+}
+
+.zs-plan-head-main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.zs-plan-tools {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 /* Zonas del plano como control segmentado. */
 .zs-zones {
   border: 1px solid var(--zs-line);
   border-radius: var(--zs-radius);
   display: flex;
   height: 32px;
-  margin-left: auto;
   max-width: 100%;
   overflow-x: auto;
 }
@@ -1794,54 +1813,23 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   opacity: 0.7;
 }
 
-.zs-zones + .zs-btn {
-  margin-left: 0;
-}
-
 /* En pantallas estrechas el plano se desplaza dentro de su tarjeta, no la pagina. */
 .zs-plan-scroll {
   overflow-x: auto;
 }
 
+/* El mismo lienzo 16:9 al ver y al editar: las mesas quedan donde se colocaron. */
 .zs-plan {
-  /* El alto lo calcula la vista para encuadrar las mesas. */
-  height: var(--plan-h, 480px);
+  aspect-ratio: 16 / 9;
   background-color: var(--fl-floor);
-  min-width: 760px;
+  min-width: 600px;
   position: relative;
-}
-
-.zs-plan-area {
-  background: var(--fl-zone);
-  border: 1px solid var(--fl-zone-line);
-  border-radius: 14px;
-  position: absolute;
-}
-
-.zs-plan-area-tag {
-  align-items: center;
-  border-radius: 999px;
-  color: var(--zs-ink-faint);
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 600;
-  gap: 5px;
-  left: 12px;
-  letter-spacing: 0.04em;
-  padding: 3px 10px 3px 7px;
-  position: absolute;
-  text-transform: uppercase;
-  top: 10px;
-}
-
-.zs-plan-area-tag .material-symbols-outlined {
-  font-size: 15px;
 }
 
 /* Mesa: el boton es tablero + sillas; las sillas van en absoluto. */
 .zs-ft {
-  --w: 74px;
-  --h: 74px;
+  --w: 62px;
+  --h: 62px;
   --edge: var(--fl-edge);
   --top: var(--fl-table);
   --ink: var(--zs-ink);
@@ -1855,19 +1843,18 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   height: var(--h);
   padding: 0;
   position: absolute;
-  /* --s lo pone el JS del plano cuando las mesas no caben a tamano real. */
-  transform: translate(-50%, -50%) scale(var(--s, 1));
+  transform: translate(-50%, -50%);
   transition: transform 0.15s ease;
   width: var(--w);
 }
 
 .zs-ft[data-shape="round"] {
-  --w: 60px;
-  --h: 60px;
+  --w: 50px;
+  --h: 50px;
 }
 
 .zs-ft[data-shape="long"] {
-  --w: 132px;
+  --w: 110px;
 }
 
 .zs-ft-top {
@@ -1891,13 +1878,13 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 }
 
 .zs-ft-top b {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .zs-ft-top small {
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   opacity: 0.85;
@@ -1925,11 +1912,11 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 .zs-chair {
   background: var(--seat);
   border-radius: 50%;
-  height: 13px;
+  height: 11px;
   position: absolute;
   transform: translate(-50%, -50%);
   transition: background 0.2s ease;
-  width: 13px;
+  width: 11px;
 }
 
 .zs-chair.is-taken {
@@ -1937,16 +1924,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 }
 
 .zs-ft:hover {
-  transform: translate(-50%, -50%) scale(calc(var(--s, 1) * 1.06));
-}
-
-/* Mesas achicadas: solo el codigo, mas grande para que se lea. El color ya dice el estado. */
-.zs-plan.is-compact .zs-ft-top small {
-  display: none;
-}
-
-.zs-plan.is-compact .zs-ft-top b {
-  font-size: 1.3rem;
+  transform: translate(-50%, -50%) scale(1.06);
 }
 
 .zs-ft:focus-visible {
@@ -2034,21 +2012,18 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 /* Modo edicion */
 /* Solo editando hay rejilla: ayuda a alinear las mesas. */
 .zs-plan.is-editing {
-  aspect-ratio: 16 / 9;
   background-image: radial-gradient(var(--fl-dots) 1.2px, transparent 1.2px);
   background-size: 12px 12px;
-  height: auto;
 }
 
-/* Mesas en %; margen fijo en px (PLAN_INSET en wapp/floor.py) para sillas y etiquetas. */
+/* Area de las coordenadas (0-100 %), con margen para sillas y bordes. */
 .zs-plan-inner {
-  inset: 104px 112px 76px;
+  inset: 48px;
   position: absolute;
 }
 
-/* Editando, el area es el lienzo completo: ahi viven las coordenadas. */
+/* Editando se marca el area donde se pueden soltar las mesas. */
 .zs-plan.is-editing .zs-plan-inner {
-  inset: 48px;
   outline: 1.5px dashed var(--zs-line);
   outline-offset: 30px;
   border-radius: 4px;
@@ -2066,7 +2041,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 .zs-plan.is-editing .zs-ft.is-dragging {
   cursor: grabbing;
-  transform: translate(-50%, -50%) scale(calc(var(--s, 1) * 1.1));
+  transform: translate(-50%, -50%) scale(1.1);
   transition: none;
   z-index: 5;
 }
@@ -3369,4 +3344,8 @@ button.zs-tl-label:hover {
   .zs-sum-split {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.dark .zs-plan-scroll {
+  color-scheme: dark;
 }

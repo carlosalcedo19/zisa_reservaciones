@@ -1,0 +1,361 @@
+# Traducciones al espanol de Unfold, que no trae catalogo propio, y algun
+# retoque de Django. Tras editar este archivo hay que recompilar el .mo:
+#   python manage.py compilemessages   (necesita gettext instalado)
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "\n                    Export %(len)s selected item.\n                "
+msgid_plural "\n                    Export %(len)s selected items.\n                "
+msgstr[0] "Exportar %(len)s elemento seleccionado."
+msgstr[1] "Exportar %(len)s elementos seleccionados."
+
+msgid "\n                Found %(counter)s result in %(time)s seconds\n            "
+msgid_plural "\n                Found %(counter)s results in %(time)s seconds\n            "
+msgstr[0] "%(counter)s resultado en %(time)s segundos"
+msgstr[1] "%(counter)s resultados en %(time)s segundos"
+
+msgid "%(class_name)s %(instance)s"
+msgstr "%(class_name)s %(instance)s"
+
+msgid "%(full_result_count)s total"
+msgstr "%(full_result_count)s en total"
+
+msgid "Add new item"
+msgstr "Añadir nuevo"
+
+msgid "Add row"
+msgstr "Añadir fila"
+
+msgid "After you've created a user, you’ll be able to edit more user options."
+msgstr "Cuando crees el usuario podrás editar el resto de sus opciones."
+
+msgid "All applications"
+msgstr "Todas las secciones"
+
+msgid "Apply Filters"
+msgstr "Aplicar filtros"
+
+msgid "Below is a preview of data to be imported. If you are satisfied with the results, click 'Confirm import'"
+msgstr "Esta es una vista previa de lo que se va a importar. Si está bien, pulsa «Confirmar importación»."
+
+msgid "Bold"
+msgstr "Negrita"
+
+msgid "Change History"
+msgstr "Historial de cambios"
+
+msgid "Change reason"
+msgstr "Motivo del cambio"
+
+msgid "Changed by"
+msgstr "Cambiado por"
+
+msgid "Changes"
+msgstr "Cambios"
+
+msgid "Choose a date from the list below to revert to a previous version of this object"
+msgstr "Elige una fecha de la lista para volver a una versión anterior de este registro"
+
+msgid "Choose file to upload"
+msgstr "Elige un archivo para subir"
+
+msgid "Click to download"
+msgstr "Haz clic para descargar"
+
+msgid "Code"
+msgstr "Código"
+
+msgid "Collapse"
+msgstr "Contraer"
+
+msgid "Comment"
+msgstr "Comentario"
+
+msgid "Confirm import"
+msgstr "Confirmar importación"
+
+msgid "Dark"
+msgstr "Oscuro"
+
+msgid "Dataset not found. No action performed."
+msgstr "No se encontraron los datos. No se hizo ningún cambio."
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Date from"
+msgstr "Fecha desde"
+
+msgid "Date to"
+msgstr "Fecha hasta"
+
+msgid "Default"
+msgstr "Predeterminado"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Enter an URL"
+msgstr "Escribe una URL"
+
+msgid "Errors"
+msgstr "Errores"
+
+msgid "Expand row"
+msgstr "Desplegar fila"
+
+msgid "Export"
+msgstr "Exportar"
+
+msgid "False"
+msgstr "No"
+
+msgid "Filters"
+msgstr "Filtros"
+
+msgid "Forgotten your password or username?"
+msgstr "¿Olvidaste tu contraseña o tu usuario?"
+
+msgid "From"
+msgstr "Desde"
+
+msgid "General"
+msgstr "General"
+
+msgid "Go back"
+msgstr "Volver"
+
+msgid "Group"
+msgstr "Grupo"
+
+msgid "Group permissions"
+msgstr "Permisos del grupo"
+
+msgid "Heading"
+msgstr "Título"
+
+msgid "Image preview"
+msgstr "Vista previa de la imagen"
+
+msgid "Import"
+msgstr "Importar"
+
+msgid "Indent decrease"
+msgstr "Reducir sangría"
+
+msgid "Indent increase"
+msgstr "Aumentar sangría"
+
+msgid "Italic"
+msgstr "Cursiva"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Line number"
+msgstr "Número de línea"
+
+msgid "Link"
+msgstr "Enlace"
+
+msgid "Loading more results..."
+msgstr "Cargando más resultados…"
+
+msgid "Manage group"
+msgstr "Gestionar grupo"
+
+msgid "Manage user"
+msgstr "Gestionar usuario"
+
+msgid "More actions"
+msgstr "Más acciones"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "New"
+msgstr "Nuevo"
+
+msgid "Next"
+msgstr "Siguiente"
+
+msgid "No"
+msgstr "No"
+
+msgid "No data"
+msgstr "Sin datos"
+
+msgid "No recent searches"
+msgstr "No hay búsquedas recientes"
+
+msgid "No results found"
+msgstr "No hay resultados"
+
+msgid "No results matching your query"
+msgstr "Nada coincide con tu búsqueda"
+
+msgid "Non field specific"
+msgstr "Generales"
+
+msgid "Not enough data."
+msgstr "No hay datos suficientes."
+
+msgid "Object"
+msgstr "Registro"
+
+msgid "Object permissions"
+msgstr "Permisos del registro"
+
+msgid "Ordered list"
+msgstr "Lista numerada"
+
+msgid "Paragraph"
+msgstr "Párrafo"
+
+msgid "Please correct these errors in your data where possible, then reupload it using the form above."
+msgstr "Corrige estos errores en tus datos y vuelve a subirlos con el formulario de arriba."
+
+msgid "Press the 'Change History' button below to edit the history."
+msgstr "Pulsa «Historial de cambios» para editar el historial."
+
+msgid "Press the 'Revert' button below to revert to this version of the object."
+msgstr "Pulsa «Revertir» para volver a esta versión del registro."
+
+msgid "Previous"
+msgstr "Anterior"
+
+msgid "Quote"
+msgstr "Cita"
+
+msgid "Raw passwords are not stored, so there is no way to see this user’s password, but you can change the password using <a href=\"{}\" class=\"text-primary-600 dark:text-primary-500\">this form</a>."
+msgstr "Las contraseñas no se guardan tal cual, así que no hay forma de ver la de este usuario, pero puedes cambiarla con <a href=\"{}\" class=\"text-primary-600 dark:text-primary-500\">este formulario</a>."
+
+msgid "Recent searches"
+msgstr "Búsquedas recientes"
+
+msgid "Record picture"
+msgstr "Imagen del registro"
+
+msgid "Redo"
+msgstr "Rehacer"
+
+msgid "Reset filters"
+msgstr "Quitar filtros"
+
+msgid "Reset to default"
+msgstr "Restablecer"
+
+msgid "Return to site"
+msgstr "Volver al sitio"
+
+msgid "Revert"
+msgstr "Revertir"
+
+msgid "Row"
+msgstr "Fila"
+
+msgid "Run"
+msgstr "Aplicar"
+
+msgid "Search apps and models..."
+msgstr "Buscar en el menú…"
+
+msgid "Select action"
+msgstr "Elige una acción"
+
+msgid "Select action to run"
+msgstr "Acción para lo seleccionado"
+
+msgid "Select all rows"
+msgstr "Seleccionar todas las filas"
+
+msgid "Select currency"
+msgstr "Elige la moneda"
+
+msgid "Select record"
+msgstr "Seleccionar fila"
+
+msgid "Select value"
+msgstr "Elige una opción"
+
+msgid "Skipped"
+msgstr "Omitidas"
+
+msgid "Some rows failed to validate"
+msgstr "Algunas filas no pasaron la validación"
+
+msgid "Strike"
+msgstr "Tachado"
+
+msgid "Submit"
+msgstr "Enviar"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "This exporter will export the following fields"
+msgstr "Se exportarán estos campos"
+
+msgid "This exporter will export the following fields: "
+msgstr "Se exportarán estos campos:"
+
+msgid "This importer will import the following fields: "
+msgstr "Se importarán estos campos:"
+
+msgid "This object doesn't have a change history."
+msgstr "Este registro no tiene historial de cambios."
+
+msgid "This page yielded into no results. Create a new item or reset your filters."
+msgstr "No hay nada que mostrar. Crea un registro nuevo o quita los filtros."
+
+msgid "To"
+msgstr "Hasta"
+
+msgid "Toggle password visibility"
+msgstr "Mostrar u ocultar la contraseña"
+
+msgid "True"
+msgstr "Sí"
+
+msgid "Type to search"
+msgstr "Escribe para buscar"
+
+msgid "Underlined"
+msgstr "Subrayado"
+
+msgid "Undo"
+msgstr "Deshacer"
+
+msgid "Unlink"
+msgstr "Quitar enlace"
+
+msgid "Unordered list"
+msgstr "Lista con viñetas"
+
+msgid "Update"
+msgstr "Actualizar"
+
+msgid "User permissions"
+msgstr "Permisos del usuario"
+
+msgid "Value"
+msgstr "Valor"
+
+msgid "Welcome"
+msgstr "Hola"
+
+msgid "Welcome back to"
+msgstr "Te damos la bienvenida a"
+
+msgid "You have been successfully logged out from the administration"
+msgstr "Cerraste sesión correctamente."
+
+msgid "staff status"
+msgstr "acceso al panel"
+
+msgid "superuser status"
+msgstr "superusuario"

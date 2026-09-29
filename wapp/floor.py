@@ -100,22 +100,22 @@ def _chairs(table, taken):
         for i in range(n):
             ang = math.radians(180 + 360 * i / n) if n <= 2 else math.radians(-90 + 360 * i / n)
             cx, cy = math.cos(ang), math.sin(ang)
-            sitios.append(f"left:calc(50% + {cx:.3f} * (50% + 9px));"
-                          f"top:calc(50% + {cy:.3f} * (50% + 9px))")
+            sitios.append(f"left:calc(50% + {cx:.3f} * (50% + 8px));"
+                          f"top:calc(50% + {cy:.3f} * (50% + 8px))")
     elif table.shape == "square":
-        lados = ["left:50%;top:-9px", "left:50%;top:calc(100% + 9px)",
-                 "left:-9px;top:50%", "left:calc(100% + 9px);top:50%"]
+        lados = ["left:50%;top:-8px", "left:50%;top:calc(100% + 8px)",
+                 "left:-8px;top:50%", "left:calc(100% + 8px);top:50%"]
         sitios = lados[:n]
     else:
         largos = n - 2
         arriba = math.ceil(largos / 2)
         abajo = largos - arriba
-        sitios.append("left:-9px;top:50%")
-        sitios.append("left:calc(100% + 9px);top:50%")
+        sitios.append("left:-8px;top:50%")
+        sitios.append("left:calc(100% + 8px);top:50%")
         for i in range(arriba):
-            sitios.append(f"left:{(i + 0.5) / arriba * 100:.1f}%;top:-9px")
+            sitios.append(f"left:{(i + 0.5) / arriba * 100:.1f}%;top:-8px")
         for i in range(abajo):
-            sitios.append(f"left:{(i + 0.5) / abajo * 100:.1f}%;top:calc(100% + 9px)")
+            sitios.append(f"left:{(i + 0.5) / abajo * 100:.1f}%;top:calc(100% + 8px)")
     return [{"style": s, "taken": i < taken} for i, s in enumerate(sitios)]
 
 
@@ -137,191 +137,6 @@ def _service_window(venue, service_date, tz, spans):
     if cierre.minute or cierre.second:
         cierre = cierre.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     return inicio, cierre
-
-
-#: Tiene que coincidir con .zs-plan-inner en static/admin/zisa.css.
-PLAN_INSET = {"top": 104, "right": 112, "bottom": 76, "left": 112}
-
-#: Ancho de referencia; el real lo pone la tarjeta, el alto es fijo.
-PLAN_NOMINAL_W = 1000
-
-
-def _half(table):
-    """Medio ancho y medio alto del tablero en px (ver .zs-ft en zisa.css)."""
-    if table.shape == "round":
-        return 30, 30
-    if table.shape == "long":
-        return table.width / 2, 37
-    return 37, 37
-
-
-#: Margenes de zona en px: silla + aire, etiqueta y hueco entre zonas.
-ZONE_CHAIR = 26
-ZONE_LABEL = 34
-ZONE_GAP = 10
-
-
-#: Alto interior normal y el tope al que puede crecer si las filas se pisan.
-PLAN_MAX_H = 440
-PLAN_CROWDED_MAX_H = 720
-
-#: Sillas y aire alrededor del tablero; lo mismo usa el JS que escala las mesas.
-TABLE_CLEARANCE = 38
-
-
-def _inner_height(inner_w, sx, sy):
-    """Alto que conserva la proporcion del lienzo 16:9, acotado para caber en pantalla."""
-    if sx >= 1 and sy >= 1:
-        inner_h = inner_w * (sy * 9) / (sx * 16)
-    else:
-        inner_h = 0
-    return round(min(PLAN_MAX_H, max(210, inner_h)))
-
-
-def _crowded_height(tables, inner_w, inner_h):
-    """Estira el alto hasta que no se pisen las mesas que comparten columna."""
-    need = inner_h
-    for i, a in enumerate(tables):
-        aw, ah = _half(a)
-        for b in tables[i + 1:]:
-            bw, bh = _half(b)
-            dy = abs(a.dy - b.dy)
-            if not dy or abs(a.dx - b.dx) / 100 * inner_w >= aw + bw + TABLE_CLEARANCE:
-                continue
-            need = max(need, (ah + bh + TABLE_CLEARANCE) / (dy / 100))
-    return round(min(PLAN_CROWDED_MAX_H, need))
-
-
-def _grow_box(b, t):
-    hw, hh = _half(t)
-    if t.dx < b["x0"]:
-        b["x0"], b["pl"] = t.dx, hw + ZONE_CHAIR
-    elif t.dx == b["x0"]:
-        b["pl"] = max(b["pl"], hw + ZONE_CHAIR)
-    if t.dx > b["x1"]:
-        b["x1"], b["pr"] = t.dx, hw + ZONE_CHAIR
-    elif t.dx == b["x1"]:
-        b["pr"] = max(b["pr"], hw + ZONE_CHAIR)
-    b["y0"], b["y1"] = min(b["y0"], t.dy), max(b["y1"], t.dy)
-    b["hh"] = max(b["hh"], hh)
-
-
-def _zone_boxes(tables):
-    boxes = {}
-    for t in tables:
-        b = boxes.setdefault(t.area_id, {
-            "name": t.area.name, "icon": _area_icon(t.area.name),
-            "idx": getattr(t, "zone_idx", len(boxes)) % 4,
-            "x0": 101.0, "x1": -1.0, "y0": 101.0, "y1": -1.0,
-            "pl": 0, "pr": 0, "hh": 0,
-        })
-        _grow_box(b, t)
-
-    boxes = list(boxes.values())
-    # Cada borde es [% del area interior, px]: left = calc(x% - px).
-    for b in boxes:
-        b["l"] = [b["x0"], -b["pl"]]
-        b["r"] = [b["x1"], b["pr"]]
-        b["t"] = [b["y0"], -(b["hh"] + ZONE_CHAIR + ZONE_LABEL)]
-        b["b"] = [b["y1"], b["hh"] + ZONE_CHAIR]
-    return boxes
-
-
-def _cruza(a0, a1, b0, b1):
-    return a0 < b1 and b0 < a1
-
-
-def _ay(e, inner_h):
-    return e[0] / 100 * inner_h + e[1]
-
-
-def _side_by_side(a, b, inner_h):
-    return (_cruza(_ay(a["t"], inner_h), _ay(a["b"], inner_h),
-                   _ay(b["t"], inner_h), _ay(b["b"], inner_h))
-            and not _cruza(a["x0"], a["x1"], b["x0"], b["x1"]))
-
-
-def _match_heights(boxes, inner_h):
-    def ay(e):
-        return _ay(e, inner_h)
-
-    for a in boxes:
-        for b in boxes:
-            if a is b or not _side_by_side(a, b, inner_h):
-                continue
-            arriba = min(a["t"], b["t"], key=ay)
-            abajo = max(a["b"], b["b"], key=ay)
-            a["t"] = b["t"] = list(arriba)
-            a["b"] = b["b"] = list(abajo)
-
-
-def _junta(a1, b0, pa, pb):
-    return [(a1 + b0) / 2, (pa - pb) / 2]
-
-
-def _join_side(a, b, boxes):
-    izq, der = (a, b) if a["x1"] < b["x0"] else (b, a)
-    en_medio = any(c is not a and c is not b and izq["x1"] < c["x0"] and c["x1"] < der["x0"]
-                   and _cruza(c["y0"], c["y1"], izq["y0"], izq["y1"]) for c in boxes)
-    if not en_medio:
-        m = _junta(izq["x1"], der["x0"], izq["pr"], der["pl"])
-        izq["r"], der["l"] = [m[0], m[1] - ZONE_GAP / 2], [m[0], m[1] + ZONE_GAP / 2]
-
-
-def _join_stacked(a, b):
-    arr, aba = (a, b) if a["y1"] < b["y0"] else (b, a)
-    m = [(arr["y1"] + aba["y0"]) / 2, 0]
-    arr["b"], aba["t"] = [m[0], -ZONE_GAP / 2], [m[0], ZONE_GAP / 2]
-
-
-def _share_borders(boxes):
-    """Zonas vecinas se reparten el hueco: asi nunca se pisan, sea cual sea el ancho."""
-    for i, a in enumerate(boxes):
-        for b in boxes[i + 1:]:
-            misma_franja = _cruza(a["y0"] - 1, a["y1"] + 1, b["y0"] - 1, b["y1"] + 1)
-            misma_columna = _cruza(a["x0"] - 1, a["x1"] + 1, b["x0"] - 1, b["x1"] + 1)
-            if misma_franja and not misma_columna:
-                _join_side(a, b, boxes)
-            elif misma_columna and not misma_franja:
-                _join_stacked(a, b)
-
-
-def _css(e):
-    signo = "+" if e[1] >= 0 else "-"
-    return f"calc({e[0]:.3f}% {signo} {abs(e[1]):.0f}px)"
-
-
-def _tramo(a, z):
-    return f"calc({z[0] - a[0]:.3f}% + {z[1] - a[1]:.0f}px)"
-
-
-def _layout(tables):
-    """Estira el rectangulo que ocupan las mesas (no el lienzo entero); deja dx/dy en cada mesa."""
-    if not tables:
-        return 480, []
-
-    xs = [t.x for t in tables]
-    ys = [t.y for t in tables]
-    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-    sx, sy = x1 - x0, y1 - y0
-
-    for t in tables:
-        t.dx = (t.x - x0) / sx * 100 if sx >= 1 else 50.0
-        t.dy = (t.y - y0) / sy * 100 if sy >= 1 else 50.0
-
-    ins = PLAN_INSET
-    inner_w = PLAN_NOMINAL_W - ins["left"] - ins["right"]
-    inner_h = _crowded_height(tables, inner_w, _inner_height(inner_w, sx, sy))
-    height = inner_h + ins["top"] + ins["bottom"]
-
-    boxes = _zone_boxes(tables)
-    _match_heights(boxes, inner_h)
-    _share_borders(boxes)
-
-    for b in boxes:
-        b["style"] = (f"left:{_css(b['l'])};top:{_css(b['t'])};"
-                      f"width:{_tramo(b['l'], b['r'])};height:{_tramo(b['t'], b['b'])}")
-    return height, boxes
 
 
 @dataclass(frozen=True)
@@ -540,7 +355,7 @@ def _draw_table(table, state, progress, now_info, next_info):
     table.y = float(table.pos_y)
     table.shape = _table_shape(table.max_seats)
     if table.shape == "long":
-        table.width = 64 + 34 * math.ceil((table.max_seats - 2) / 2)
+        table.width = 54 + 28 * math.ceil((table.max_seats - 2) / 2)
     table.progress = progress
 
     party = now_info["party"] if now_info and now_info["kind"] == "reservation" else 0
@@ -629,11 +444,10 @@ def _arrivals_and_freeing(por_reserva, m):
 def _style_tables(tables):
     """Estilos precalculados: con cientos de mesas, los filtros de plantilla se notan."""
     for t in tables:
-        t.style = (f"left:{t.dx:.2f}%;top:{t.dy:.2f}%;"
+        # Mismas coordenadas que el modo edicion: el plano se ve tal cual se coloco.
+        t.style = (f"left:{t.x:.2f}%;top:{t.y:.2f}%;"
                    + (f"--w:{t.width}px;" if getattr(t, "width", None) else "")
                    + f"--p:{t.progress}%")
-        # Como texto con punto: {{ t.x }} se localizaria como "14,5".
-        t.rx, t.ry = f"{t.x:.2f}", f"{t.y:.2f}"
 
 
 def _timeline_bars(tables, pct):
@@ -732,18 +546,21 @@ def _shifted_url(base, local_at, minutes):
 
 
 def _zone_tabs(tables, zona, base, moment):
-    """Una pestana por zona: con muchas mesas, ver una sola la agranda en el plano."""
+    """
+    Un plano por espacio (salon, terraza, barra...), nunca todos juntos: asi cada
+    uno se ve a buen tamano por muchas mesas que tenga. Sin zona valida, la primera.
+    """
     tabs, por_zona = [], {}
     for t in tables:
-        por_zona.setdefault(t.area_id, []).append(t)
-    for i, (area_id, mesas) in enumerate(por_zona.items()):
-        for t in mesas:
-            t.zone_idx = i
-        tabs.append({"id": str(area_id), "name": mesas[0].area.name,
+        por_zona.setdefault(str(t.area_id), []).append(t)
+    if zona not in por_zona:
+        zona = next(iter(por_zona), "")
+    for area_id, mesas in por_zona.items():
+        tabs.append({"id": area_id, "name": mesas[0].area.name,
                      "icon": _area_icon(mesas[0].area.name), "count": len(mesas),
-                     "idx": i, "is_on": zona == str(area_id),
+                     "is_on": zona == area_id,
                      "url": "?" + urlencode({**base, "zona": area_id, **moment})})
-    return tabs
+    return tabs, zona
 
 
 def floor_view(request):
@@ -774,13 +591,10 @@ def floor_view(request):
     )
     base = {"local": venue.pk}
     moment = {} if is_now else {"fecha": f"{local_at:%Y-%m-%d}", "hora": f"{local_at:%H:%M}"}
-    zona = request.GET.get("zona", "")
-    zones = _zone_tabs(tables, zona, base, moment)
-    if any(z["is_on"] for z in zones):
+    zones, zona = _zone_tabs(tables, request.GET.get("zona", ""), base, moment)
+    if zona:
         tables = [t for t in tables if str(t.area_id) == zona]
         base["zona"] = zona
-    else:
-        zona = ""
     ids = {t.id for t in tables}
     en_zona = (lambda o: o.table_id in ids) if zona else (lambda o: True)
 
@@ -795,7 +609,6 @@ def floor_view(request):
         _reservations_on_tables(occupancies, tables, service_date), m,
     )
 
-    plan_height, areas = _layout(tables)
     _style_tables(tables)
 
     win_start, win_end = _service_window(venue, service_date, tz, all_spans)
@@ -817,9 +630,7 @@ def floor_view(request):
 
     context.update({
         "tables": tables,
-        "areas": areas,
         "tables_json": payload,
-        "plan_height": plan_height,
         "legend": [
             {"key": key, "label": label, "tone": tone, "count": counts[key]}
             for key, (label, tone) in STATES.items()
@@ -846,9 +657,6 @@ def floor_view(request):
         "now_url": "?" + urlencode(base),
         "zones": zones if len(zones) > 1 else [],
         "zone": zona,
-        "all_zones_url": "?" + urlencode({"local": venue.pk, **moment}),
-        "all_tables": sum(z["count"] for z in zones),
-        "table_clearance": TABLE_CLEARANCE,
         "can_edit": request.user.has_perm("venues.change_table"),
         "unplaced": unplaced if unplaced > 1 else 0,
         "positions_url": reverse("floor_positions"),

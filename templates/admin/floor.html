@@ -142,43 +142,36 @@
     <div class="zs-floor-grid">
 
         <div class="zs-card zs-plan-card">
-            <div class="zs-card-head">
-                <h3><span class="material-symbols-outlined">table_restaurant</span> {{ venue.name }}</h3>
-                {% if zones %}
-                    {# Ver una sola zona la estira a todo el plano: con muchas mesas se leen mejor. #}
-                    <nav class="zs-zones" aria-label="Zonas">
-                        <a href="{{ all_zones_url }}"{% if not zone %} class="is-on" aria-current="page"{% endif %}>
-                            Todas <small>{{ all_tables }}</small>
-                        </a>
-                        {% for z in zones %}
-                            <a href="{{ z.url }}" data-idx="{{ z.idx }}"{% if z.is_on %} class="is-on" aria-current="page"{% endif %}>
-                                <span class="material-symbols-outlined" aria-hidden="true">{{ z.icon }}</span>{{ z.name }} <small>{{ z.count }}</small>
-                            </a>
-                        {% endfor %}
-                    </nav>
-                {% endif %}
-                {% if can_edit %}
-                    <button type="button" class="zs-btn" x-show="!edit" x-on:click="startEdit()">
-                        <span class="material-symbols-outlined">open_with</span> Editar plano
-                    </button>
-                {% endif %}
+            <div class="zs-card-head zs-plan-head">
+                <div class="zs-plan-head-main">
+                    <h3><span class="material-symbols-outlined">table_restaurant</span> {{ venue.name }}</h3>
+                    {% if zones %}
+                        {# Un plano por espacio: nunca todos juntos. #}
+                        <nav class="zs-zones" aria-label="Espacios">
+                            {% for z in zones %}
+                                <a href="{{ z.url }}"{% if z.is_on %} class="is-on" aria-current="page"{% endif %}>
+                                    <span class="material-symbols-outlined" aria-hidden="true">{{ z.icon }}</span>{{ z.name }} <small>{{ z.count }}</small>
+                                </a>
+                            {% endfor %}
+                        </nav>
+                    {% endif %}
+                </div>
+                <div class="zs-plan-tools" x-show="!edit">
+                    {% if can_edit %}
+                        <button type="button" class="zs-btn" x-on:click="startEdit()">
+                            <span class="material-symbols-outlined">open_with</span> Editar plano
+                        </button>
+                    {% endif %}
+                </div>
             </div>
+            {# El mismo lienzo 16:9 se ve y se edita: las mesas quedan donde se colocaron. #}
             <div class="zs-plan-scroll">
-                <div class="zs-plan" x-ref="plan" x-bind:class="{ 'is-editing': edit }"
-                     data-clearance="{{ table_clearance }}" style="--plan-h:{{ plan_height }}px">
+                <div class="zs-plan" x-ref="plan" x-bind:class="{ 'is-editing': edit }">
                   <div class="zs-plan-inner" x-ref="inner">
-                    {% for area in areas %}
-                        <div class="zs-plan-area" data-idx="{{ area.idx }}" x-show="!edit" style="{{ area.style }}">
-                            <span class="zs-plan-area-tag">
-                                <span class="material-symbols-outlined">{{ area.icon }}</span>{{ area.name }}
-                            </span>
-                        </div>
-                    {% endfor %}
-
                     {% for t in tables %}
                         <button type="button" class="zs-ft" data-id="{{ t.pk }}"
                                 data-state="{{ t.state }}" data-shape="{{ t.shape }}"
-                                data-rx="{{ t.rx }}" data-ry="{{ t.ry }}" style="{{ t.style }}"
+                                style="{{ t.style }}"
                                 x-bind:class="{ 'is-selected': selId === '{{ t.pk }}' }"
                                 x-on:click="pick('{{ t.pk }}')"
                                 x-on:pointerdown="dragStart($event)"
@@ -491,14 +484,6 @@ function zsFloor() {
             var id = window.location.hash.slice(1);
             if (id && this.tables[id]) { this.selId = id; }
 
-            var fit = this.fit.bind(this), pendiente = false;
-            fit();
-            window.addEventListener("resize", function () {
-                if (pendiente) { return; }
-                pendiente = true;
-                requestAnimationFrame(function () { pendiente = false; fit(); });
-            });
-
             if (this.$root.dataset.live === "1") {
                 var self = this;
                 setInterval(function () {
@@ -552,34 +537,7 @@ function zsFloor() {
         startEdit() {
             this.edit = true;
             this.moved = {};
-            // Para editar se vuelve al lienzo completo, que es donde viven las coordenadas.
-            this.$refs.plan.querySelectorAll(".zs-ft").forEach(function (el) {
-                el.style.left = el.dataset.rx + "%";
-                el.style.top = el.dataset.ry + "%";
-            });
-            this.$nextTick(this.fit.bind(this));
             this.$refs.plan.scrollIntoView({ behavior: "smooth", block: "center" });
-        },
-
-        // Achica las mesas lo justo para que ninguna pise a otra con el ancho real del plano.
-        fit() {
-            var plan = this.$refs.plan;
-            var aire = parseFloat(plan.dataset.clearance) || 38;
-            var mesas = Array.prototype.map.call(plan.querySelectorAll(".zs-ft"), function (el) {
-                return { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
-            });
-            var escala = 1;
-            for (var i = 0; i < mesas.length; i++) {
-                for (var j = i + 1; j < mesas.length; j++) {
-                    var a = mesas[i], b = mesas[j];
-                    var cabe = Math.max(Math.abs(a.x - b.x) / ((a.w + b.w) / 2 + aire),
-                                        Math.abs(a.y - b.y) / ((a.h + b.h) / 2 + aire));
-                    if (cabe < escala) { escala = cabe; }
-                }
-            }
-            escala = Math.max(0.5, escala);
-            plan.style.setProperty("--s", escala.toFixed(3));
-            plan.classList.toggle("is-compact", escala < 0.8);
         },
 
         cancelEdit() {
