@@ -97,6 +97,21 @@ def validate_calendar(venue, starts_at):
     return shift
 
 
+def validate_not_past(venue, starts_at):
+    """Nadie reserva para un dia o una hora que ya paso, tampoco el personal."""
+    now = timezone.now()
+    if starts_at >= now:
+        return
+    ahora = timezone.localtime(now, venue_tz(venue))
+    if service_date_for(venue, starts_at) < service_date_for(venue, now):
+        raise ReservationError(
+            f"No se puede reservar en un día que ya pasó. Hoy es {ahora:%d/%m/%Y}."
+        )
+    raise ReservationError(
+        f"Esa hora ya pasó: son las {ahora:%H:%M}. Elige una hora posterior."
+    )
+
+
 def validate_lead_time(venue, starts_at, source):
     if source != Reservation.Source.WEB:
         return  # El personal puede saltarse la ventana; la web no.

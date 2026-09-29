@@ -1,7 +1,7 @@
 """Admin de reservas. Toda escritura pasa por apps.reservations.services, nunca por el ModelForm."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from functools import lru_cache
 
 from django import forms
@@ -14,7 +14,11 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
+from django.forms.widgets import MultiWidget
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.widgets import (
+    UnfoldAdminDateWidget, UnfoldAdminSelectWidget, UnfoldAdminSplitDateTimeWidget,
+)
 from unfold.contrib.filters.admin import RangeDateFilter
 
 from apps.reservations import services
@@ -85,8 +89,50 @@ def default_venue():
             or activos.first())
 
 
+#: Horas que ofrece el formulario de reservas.
+HORA_DESDE, HORA_HASTA, HORA_PASO = time(6), time(22), 30
+
+
+def half_hour_choices():
+    hora = datetime.combine(datetime.min, HORA_DESDE)
+    fin = datetime.combine(datetime.min, HORA_HASTA)
+    opciones = []
+    while hora <= fin:
+        opciones.append((f"{hora:%H:%M}", f"{hora:%H:%M}"))
+        hora += timedelta(minutes=HORA_PASO)
+    return opciones
+
+
+class HalfHourSelect(UnfoldAdminSelectWidget):
+    """Lista de horas; una que no este en ella (p. ej. 20:15 desde la web) se anade para no perderla."""
+
+    def format_value(self, value):
+        if isinstance(value, time):
+            return [f"{value:%H:%M}"]
+        return [str(value)[:5]] if value else []
+
+    def optgroups(self, name, value, attrs=None):
+        actual = value[0] if value else ""
+        horas = [c for c in self.choices if c[0]]
+        if actual and actual not in dict(horas):
+            horas = sorted([*horas, (actual, actual)])
+        # Sin hora elegida no se preselecciona la primera: hay que escogerla.
+        self.choices = [("", "Elige la hora"), *horas]
+        return super().optgroups(name, value, attrs)
+
+
+class HalfHourSplitDateTimeWidget(UnfoldAdminSplitDateTimeWidget):
+    def __init__(self, attrs=None):
+        MultiWidget.__init__(self, [
+            UnfoldAdminDateWidget(attrs={"placeholder": "Fecha"}),
+            HalfHourSelect(choices=half_hour_choices()),
+        ], attrs)
+
+
 class ReservationForm(forms.ModelForm):
     """Valida antes de guardar para que un choque salga como error de campo y no como IntegrityError."""
+
+    starts_at = forms.SplitDateTimeField(label="Inicio", widget=HalfHourSplitDateTimeWidget)
 
     class Meta:
         model = Reservation
@@ -132,6 +178,7 @@ class ReservationForm(forms.ModelForm):
         ends_at = starts_at + timedelta(minutes=duracion)
 
         try:
+            services.validate_not_past(venue, starts_at)
             if es_alta:
                 services.validate_lead_time(
                     venue, starts_at, cleaned.get("source") or Reservation.Source.STAFF

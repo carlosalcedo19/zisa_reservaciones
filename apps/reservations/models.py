@@ -49,8 +49,11 @@ class Reservation(models.Model):
         WEB = "web", "Web"
         PHONE = "phone", "Teléfono"
         WHATSAPP = "whatsapp", "WhatsApp"
+        INSTAGRAM = "instagram", "Instagram"
+        FACEBOOK = "facebook", "Facebook"
         WALK_IN = "walk_in", "Mostrador / walk-in"
         STAFF = "staff", "Personal"
+      
 
     class DepositStatus(models.TextChoices):
         NOT_APPLICABLE = "not_applicable", "No aplica"

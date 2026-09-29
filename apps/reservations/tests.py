@@ -548,11 +548,81 @@ class AdminReservaFormTests(BaseSalaTestCase):
     def formulario(self, inicio):
         from apps.reservations.admin import ReservationForm
 
+        local = timezone.localtime(inicio)
         return ReservationForm(data={
             "venue": self.venue.pk, "guest": self.guest.pk,
-            STARTS_AT: timezone.localtime(inicio).strftime("%Y-%m-%d %H:%M"),
+            "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
             "party_size": 2, "source": Reservation.Source.STAFF,
         })
+
+    def test_no_se_reserva_en_un_dia_que_ya_paso(self):
+        form = self.formulario(self.cena(dias_desde_hoy=-1))
+        self.assertFalse(form.is_valid())
+        self.assertIn("No se puede reservar en un día que ya pasó", form.errors[STARTS_AT][0])
+
+    def test_tampoco_se_mueve_una_reserva_a_un_dia_pasado(self):
+        from apps.reservations.admin import ReservationForm
+
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.STAFF,
+        )
+        ayer = timezone.localtime(self.cena(dias_desde_hoy=-1))
+        form = ReservationForm(instance=reserva, data={
+            "venue": self.venue.pk, "guest": self.guest.pk,
+            "starts_at_0": f"{ayer:%Y-%m-%d}", "starts_at_1": f"{ayer:%H:%M}",
+            "party_size": 2, "source": Reservation.Source.STAFF,
+            "status": reserva.status, "deposit_status": reserva.deposit_status,
+            "children": 0, "high_chairs": 0,
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("ya pasó", form.errors[STARTS_AT][0])
+
+    def test_tampoco_una_hora_de_hoy_que_ya_paso(self):
+        from unittest import mock
+
+        a_las_21 = self.cena(dias_desde_hoy=0, hora=21)
+        with mock.patch("django.utils.timezone.now", return_value=a_las_21):
+            form = self.formulario(self.cena(dias_desde_hoy=0, hora=20))
+            self.assertFalse(form.is_valid())
+            self.assertIn("Esa hora ya pasó: son las 21:00", form.errors[STARTS_AT][0])
+
+    def test_una_hora_de_hoy_que_aun_no_llega_si(self):
+        from unittest import mock
+
+        a_las_19 = self.cena(dias_desde_hoy=0, hora=19)
+        with mock.patch("django.utils.timezone.now", return_value=a_las_19):
+            form = self.formulario(self.cena(dias_desde_hoy=0, hora=20, minuto=30))
+            form.is_valid()
+            self.assertNotIn(STARTS_AT, form.errors)
+
+    def test_horas_cada_media_hora_de_6_a_22(self):
+        from apps.reservations.admin import ReservationForm
+
+        horas = [h for h, _ in ReservationForm().fields[STARTS_AT].widget.widgets[1].choices]
+        self.assertEqual((horas[0], horas[1], horas[-1], len(horas)), ("06:00", "06:30", "22:00", 33))
+
+    def test_una_hora_fuera_de_la_lista_no_se_pierde_al_editar(self):
+        from apps.reservations.admin import ReservationForm
+
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(hora=20, minuto=15),
+            party_size=2, source=Reservation.Source.STAFF,
+        )
+        html = str(ReservationForm(instance=reserva)[STARTS_AT])
+        self.assertIn('<option value="20:15" selected>', html)
+        self.assertIn('<option value="20:30">', html)
+
+    def test_en_una_reserva_nueva_hay_que_elegir_la_hora(self):
+        from apps.reservations.admin import ReservationForm
+
+        html = str(ReservationForm()[STARTS_AT])
+        self.assertIn('<option value="">Elige la hora</option>', html)
+        self.assertNotIn("selected", html)
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "starts_at_1": ""}
+        self.assertFalse(form.is_valid())
+        self.assertIn(STARTS_AT, form.errors)
 
     def test_hora_fuera_de_turno_es_error_del_campo(self):
         form = self.formulario(self.cena(hora=17))
