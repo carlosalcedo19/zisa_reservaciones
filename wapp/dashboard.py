@@ -246,7 +246,7 @@ def _range_presets(today, picked):
             for label, start, end in presets]
 
 
-def _summary(venue, today, list_url, full=True):
+def _summary(venue, today, list_url):
     """Manana, semana (lun-dom) y mes, todo de una sola consulta agrupada."""
     tomorrow = today + timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
@@ -261,8 +261,6 @@ def _summary(venue, today, list_url, full=True):
         min(prev_month_start, week_start - timedelta(days=7)),
         max(month_end, week_end, tomorrow),
     )
-    if not full:
-        return {"tomorrow": _tomorrow_summary(venue, by_day, tomorrow, list_url)}
     return {
         "tomorrow": _tomorrow_summary(venue, by_day, tomorrow, list_url),
         "week": _week_summary(by_day, today, week_start, week_end),
@@ -503,12 +501,13 @@ def dashboard_callback(request, context):
 
     _decorate_upcoming(upcoming, overdue, tz, reverse("admin:index"))
 
-    # Semana, mes y rango son cifras del negocio: solo para el superusuario.
+    # El resumen son cifras del negocio: solo para el superusuario.
     is_boss = getattr(getattr(request, "user", None), "is_superuser", False)
     if is_boss:
         picked = _parse_range(request, today)
         presets = _range_presets(today, picked)
         context.update({
+            "summary": _summary(venue, today, list_url),
             "range_presets": presets,
             "range_custom": bool(picked) and not any(p["selected"] for p in presets),
             "range_summary": picked and _range_summary(venue, *picked, today, list_url),
@@ -539,7 +538,6 @@ def dashboard_callback(request, context):
         "upcoming_total": len(upcoming),
         "overdue_count": len(overdue),
         "today_url": today_url,
-        "summary": _summary(venue, today, list_url, full=is_boss),
         "overdue_url": f"{today_url}&{urlencode({'status__in': 'pending,confirmed'})}",
     })
     return context

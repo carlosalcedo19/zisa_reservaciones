@@ -3254,10 +3254,6 @@ button.zs-tl-label:hover {
   }
 }
 
-.zs-sum--solo {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .zs-sum-card--wide {
   grid-column: span 2;
 }

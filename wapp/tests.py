@@ -493,15 +493,17 @@ class PanelInicioTests(BaseSalaTestCase):
         self.assertGreater(resumen[MONTH]["no_show_rate"], 0)
         self.assertIsNotNone(resumen[MONTH]["best_day"])
 
-    def test_el_equipo_solo_ve_el_resumen_de_manana(self):
+    def test_el_equipo_no_ve_el_resumen(self):
         ctx = dashboard_callback(None, {})
         self.assertFalse(ctx["is_boss"])
-        self.assertEqual(set(ctx[SUMMARY]), {TOMORROW})
+        self.assertNotIn(SUMMARY, ctx)
         self.assertNotIn("range_summary", ctx)
 
         self.client.force_login(_staff("host", "view_reservation"))
         r = self.client.get(reverse("admin:index"), {"desde": "2026-01-01", "hasta": "2026-01-31"})
-        self.assertNotContains(r, "Esta semana")
+        self.assertContains(r, "El servicio de hoy")
+        self.assertNotContains(r, "Resumen")
+        self.assertNotContains(r, "Mañana")
         self.assertNotContains(r, 'name="desde"')
 
     def test_el_jefe_filtra_el_resumen_por_fechas(self):

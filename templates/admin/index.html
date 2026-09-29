@@ -172,6 +172,8 @@
         </div>
     </div>
 
+    {# Cifras del negocio: solo el superusuario. #}
+    {% if is_boss %}
     <div class="zs-sum-bar">
         <div class="zs-sum-title">
             <h2 class="zs-section">
@@ -180,11 +182,10 @@
             {% if range_summary %}
                 <p>{{ range_summary.start|date:"j M Y" }} – {{ range_summary.end|date:"j M Y" }}
                    · comparado con {{ range_summary.prev_start|date:"j M" }} – {{ range_summary.prev_end|date:"j M Y" }}</p>
-            {% elif is_boss %}
+            {% else %}
                 <p>Esta semana y este mes, junto a lo que viene mañana</p>
             {% endif %}
         </div>
-        {% if is_boss %}
             {# El selector lleva a un rango ya armado; las fechas sueltas envian el formulario cuando estan las dos. #}
             <form class="zs-range" method="get" action="" x-data
                   x-on:change="if ($event.target.type === 'date') { const f = $el; if (f.desde.value && f.hasta.value) f.submit(); else try { (f.desde.value ? f.hasta : f.desde).showPicker(); } catch (e) {} }">
@@ -220,10 +221,9 @@
                 </div>
                 <noscript><button type="submit" class="zs-btn">Ver</button></noscript>
             </form>
-        {% endif %}
     </div>
 
-    <div class="zs-sum{% if not is_boss %} zs-sum--solo{% endif %}">
+    <div class="zs-sum">
         {% with t=summary.tomorrow %}
         <div class="zs-card zs-sum-card">
             <div class="zs-card-head">
@@ -295,7 +295,7 @@
             <a class="zs-more" href="{{ r.url }}">Ver las reservas del período</a>
         </div>
         {% endwith %}
-        {% elif is_boss %}
+        {% else %}
         {% with w=summary.week %}
         <div class="zs-card zs-sum-card">
             <div class="zs-card-head">
@@ -356,6 +356,7 @@
         {% endwith %}
         {% endif %}
     </div>
+    {% endif %}
 
     <h2 class="zs-section">
         <span class="material-symbols-outlined">trending_up</span> Tendencias
