@@ -4,11 +4,12 @@ from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.guests.models import Guest, normalize_phone
 from apps.reservations import services
-from apps.reservations.models import Reservation, TableOccupancy
+from apps.reservations.models import Reservation, TableOccupancy, WaitlistEntry
 from apps.venues.models import Area, DurationRule, Shift, Table, TableCombination, Venue
 
 LIMA = ZoneInfo("America/Lima")
@@ -620,3 +621,42 @@ class SeedDemoDayTests(BaseSalaTestCase):
         Venue.objects.update(is_active=False)
         with self.assertRaises(CommandError):
             self.correr()
+
+
+class BorrarClienteTests(BaseSalaTestCase):
+    """El superadmin borra al cliente con todo su historial; el resto del equipo no."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.jefe = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
+        self.reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.STAFF,
+        )
+        WaitlistEntry.objects.create(venue=self.venue, guest=self.guest, date=date.today(),
+                                     desired_time=time(20, 0), party_size=2)
+        self.url = reverse("admin:guests_guest_delete", args=[self.guest.pk])
+
+    def test_el_superadmin_borra_al_cliente_y_su_historial(self):
+        self.client.force_login(self.jefe)
+        pagina = self.client.get(self.url)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertFalse(pagina.context["protected"])
+
+        self.client.post(self.url, {"post": "yes"})
+        self.assertFalse(Guest.objects.filter(pk=self.guest.pk).exists())
+        self.assertFalse(Reservation.objects.filter(pk=self.reserva.pk).exists())
+        self.assertFalse(WaitlistEntry.objects.exists())
+        self.assertFalse(TableOccupancy.objects.filter(reservation_id=self.reserva.pk).exists())
+
+    def test_el_equipo_no_puede_borrar_clientes(self):
+        from django.contrib.auth.models import Permission, User
+
+        staff = User.objects.create_user("host", password=secrets.token_urlsafe(),
+                                         is_staff=True)
+        staff.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_guest", "delete_guest"]))
+        self.client.force_login(staff)
+        self.assertEqual(self.client.post(self.url, {"post": "yes"}).status_code, 403)
+        self.assertTrue(Guest.objects.filter(pk=self.guest.pk).exists())

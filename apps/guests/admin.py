@@ -1,8 +1,10 @@
 from django.contrib import admin
+from django.db import transaction
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin
 
 from apps.guests.models import Guest, Tag
+from apps.reservations.models import Reservation, WaitlistEntry
 
 # Las etiquetas llevan el color que elige el equipo, asi que no pueden usar los
 # tonos fijos de .zs-chip: solo toman su forma y le pasan el color por variable.
@@ -74,3 +76,39 @@ class GuestAdmin(ModelAdmin):
         for guest in queryset:
             guest.refresh_counters()
         self.message_user(request, f"{queryset.count()} clientes recalculados.")
+
+    # Reserva y lista de espera protegen al cliente para que nadie lo borre sin
+    # querer; el superadmin si puede, y se lleva su historial con el.
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def _historial(self, guests):
+        return (Reservation.objects.filter(guest__in=guests),
+                WaitlistEntry.objects.filter(guest__in=guests))
+
+    def get_deleted_objects(self, objs, request):
+        objs = list(objs)
+        borrados, cuenta, permisos, _ = super().get_deleted_objects(objs, request)
+        cuenta, permisos, protegidos = dict(cuenta), set(permisos), []
+        for qs in self._historial(objs):
+            if not qs.exists():
+                continue
+            b, c, p, pr = self.admin_site._registry[qs.model].get_deleted_objects(qs, request)
+            borrados += b
+            permisos |= set(p)
+            protegidos += pr
+            for nombre, n in c.items():
+                cuenta[nombre] = cuenta.get(nombre, 0) + n
+        return borrados, cuenta, permisos, protegidos
+
+    @transaction.atomic
+    def delete_model(self, request, obj):
+        for qs in self._historial([obj]):
+            qs.delete()
+        super().delete_model(request, obj)
+
+    @transaction.atomic
+    def delete_queryset(self, request, queryset):
+        for qs in self._historial(queryset):
+            qs.delete()
+        super().delete_queryset(request, queryset)
