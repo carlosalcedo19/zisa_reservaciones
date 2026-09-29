@@ -660,3 +660,92 @@ class BorrarClienteTests(BaseSalaTestCase):
         self.client.force_login(staff)
         self.assertEqual(self.client.post(self.url, {"post": "yes"}).status_code, 403)
         self.assertTrue(Guest.objects.filter(pk=self.guest.pk).exists())
+
+
+class ExcelTests(BaseSalaTestCase):
+    """Descarga en Excel por rango de fechas, solo para el superusuario."""
+
+    RESERVAS = "admin:reservations_reservation_export_excel"
+    CLIENTES = "admin:guests_guest_export_excel"
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.jefe = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
+        self.manana = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(hora=21), party_size=3,
+            source=Reservation.Source.STAFF,
+        )
+        self.pasado = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(2), party_size=2,
+            source=Reservation.Source.STAFF,
+        )
+        services.cancel(self.pasado, reason="Cambio de planes")
+        self.client.force_login(self.jefe)
+
+    def excel(self, url, **params):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        r = self.client.get(reverse(url), params)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("attachment;", r["Content-Disposition"])
+        return load_workbook(BytesIO(r.content)), r["Content-Disposition"]
+
+    def test_sin_rango_muestra_la_pantalla_para_elegirlo(self):
+        r = self.client.get(reverse(self.RESERVAS))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'name="desde"')
+        self.assertContains(r, "Semana pasada")
+        self.assertNotIn("Content-Disposition", r)
+
+    def test_rango_al_reves_avisa(self):
+        r = self.client.get(reverse(self.RESERVAS), {"desde": "2026-09-30", "hasta": "2026-09-01"})
+        self.assertContains(r, "no puede ser posterior")
+
+    def test_reservas_de_un_dia_y_resumen(self):
+        dia = self.manana.service_date.isoformat()
+        wb, cabecera = self.excel(self.RESERVAS, desde=dia, hasta=dia)
+        self.assertIn(f"reservas_{dia}_a_{dia}.xlsx", cabecera)
+        filas = list(wb["Reservas"].iter_rows(values_only=True))
+        self.assertEqual(filas[0][:5], ("Fecha", "Hora", "Hasta", "Código", "Cliente"))
+        self.assertEqual([f[3] for f in filas[1:]], [self.manana.code])
+        self.assertEqual(filas[1][1].strftime("%H:%M"), "21:00")
+        resumen = list(wb["Resumen por día"].iter_rows(values_only=True))
+        self.assertEqual(resumen[1][2:], (1, 3, 0, 0))
+
+    def test_rango_de_varios_dias_la_cancelada_no_suma_personas(self):
+        wb, _ = self.excel(self.RESERVAS, desde=self.manana.service_date.isoformat(),
+                           hasta=self.pasado.service_date.isoformat())
+        self.assertEqual(wb["Reservas"].max_row, 3)
+        resumen = {f[0].date(): f[2:] for f in
+                   wb["Resumen por día"].iter_rows(min_row=2, values_only=True)}
+        self.assertEqual(resumen[self.pasado.service_date], (1, 0, 1, 0))
+
+    def test_clientes_que_reservaron_o_nuevos(self):
+        otro = Guest.objects.create(phone="+51911111111", name="Beto Sin Reservas")
+        dia = self.manana.service_date.isoformat()
+        wb, _ = self.excel(self.CLIENTES, desde=dia, hasta=dia, modo="reservaron")
+        nombres = [f[0] for f in wb["Clientes"].iter_rows(min_row=2, values_only=True)]
+        self.assertEqual(nombres, ["Ana Rojas"])
+
+        hoy = timezone.localdate().isoformat()
+        wb, _ = self.excel(self.CLIENTES, desde=hoy, hasta=hoy, modo="nuevos")
+        nombres = [f[0] for f in wb["Clientes"].iter_rows(min_row=2, values_only=True)]
+        self.assertEqual(sorted(nombres), ["Ana Rojas", otro.name])
+
+    def test_solo_el_superadmin_ve_el_boton_y_descarga(self):
+        from django.contrib.auth.models import Permission, User
+
+        self.assertContains(self.client.get(reverse("admin:guests_guest_changelist")),
+                            "Descargar Excel")
+        staff = User.objects.create_user("host", password=secrets.token_urlsafe(),
+                                         is_staff=True)
+        staff.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_guest", "view_reservation"]))
+        self.client.force_login(staff)
+        for url in (self.CLIENTES, self.RESERVAS):
+            self.assertEqual(self.client.get(reverse(url)).status_code, 403)
+        for lista in ("admin:guests_guest_changelist", "admin:reservations_reservation_changelist"):
+            self.assertNotContains(self.client.get(reverse(lista)), "Descargar Excel")

@@ -19,6 +19,7 @@ from unfold.contrib.filters.admin import RangeDateFilter
 
 from apps.reservations import services
 from apps.guests.models import Guest
+from wapp.excel import ExcelExportMixin, add_sheet, new_workbook
 from apps.venues.models import Venue
 from apps.reservations.models import (
     Reservation,
@@ -185,7 +186,7 @@ class EventInline(TabularInline):
 
 
 @admin.register(Reservation)
-class ReservationAdmin(ModelAdmin):
+class ReservationAdmin(ExcelExportMixin, ModelAdmin):
     form = ReservationForm
     # get_list_display anade la columna del siguiente paso tras "status_chip".
     list_display = ("when", "guest_display", "party_size", "tables_display",
@@ -210,6 +211,61 @@ class ReservationAdmin(ModelAdmin):
         return super().get_queryset(request).prefetch_related(active_occupancies_prefetch())
     actions = ["action_confirm", "action_seat", "action_finish", "action_no_show",
                "action_cancel"]
+    actions_list = ["export_excel"]
+    excel_name = "reservas"
+
+    #: Lo que no ocupa sala: no suma personas en el resumen por dia.
+    EXCEL_NO_SALA = (Reservation.Status.CANCELLED, Reservation.Status.NO_SHOW,
+                     Reservation.Status.WAITLISTED)
+
+    excel_help = "Se filtra por el día del servicio."
+
+    def excel_filter(self, queryset, data):
+        return queryset.filter(service_date__range=(data["desde"], data["hasta"]))
+
+    def excel_workbook(self, request, queryset):
+        reservas = list(queryset.select_related("guest", "venue", "shift")
+                        .prefetch_related("tags")
+                        .order_by("service_date", "starts_at"))
+        wb = new_workbook()
+        filas = []
+        for r in reservas:
+            tz = services.venue_tz(r.venue)
+            inicio = timezone.localtime(r.starts_at, tz)
+            fin = timezone.localtime(r.ends_at, tz) if r.ends_at else None
+            filas.append([
+                r.service_date, inicio.time(), fin.time() if fin else None, r.code,
+                r.guest.name, r.guest.phone, r.party_size, r.children, r.table_codes,
+                r.get_status_display(), r.get_source_display(),
+                r.shift.name if r.shift else "", r.occasion,
+                ", ".join(t.name for t in r.tags.all()), r.guest_notes, r.internal_notes,
+                r.deposit_amount, r.get_deposit_status_display(),
+                timezone.localtime(r.created_at, tz).replace(tzinfo=None),
+            ])
+        add_sheet(wb, "Reservas", [
+            ("Fecha", 12, "date"), ("Hora", 8, "time"), ("Hasta", 8, "time"),
+            ("Código", 12, None), ("Cliente", 26, None), ("Teléfono", 16, None),
+            ("Personas", 10, None), ("Niños", 7, None), ("Mesas", 12, None),
+            ("Estado", 20, None), ("Origen", 18, None), ("Turno", 12, None),
+            ("Ocasión", 16, None), ("Etiquetas", 26, None), ("Notas del cliente", 34, None),
+            ("Notas internas", 34, None), ("Depósito", 10, None),
+            ("Estado del depósito", 18, None), ("Creada", 17, "datetime"),
+        ], filas)
+
+        por_dia = {}
+        for r in reservas:
+            d = por_dia.setdefault(r.service_date, [0, 0, 0, 0])
+            d[0] += 1
+            if r.status not in self.EXCEL_NO_SALA:
+                d[1] += r.party_size
+            d[2] += r.status == Reservation.Status.CANCELLED
+            d[3] += r.status == Reservation.Status.NO_SHOW
+        add_sheet(wb, "Resumen por día", [
+            ("Fecha", 12, "date"), ("Día", 12, None), ("Reservas", 10, None),
+            ("Personas", 10, None), ("Canceladas", 11, None), ("No-shows", 10, None),
+        ], ([dia, date_format(dia, "l").capitalize(), *cifras]
+            for dia, cifras in por_dia.items()))
+        return wb
 
     # Mesa, hora de fin, dia de servicio y duracion los calcula la capa de servicio.
     add_fieldsets = (

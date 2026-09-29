@@ -1,0 +1,74 @@
+{% extends "admin/base_site.html" %}
+{# Datos: wapp.excel.ExcelExportMixin.export_excel. El formulario va por GET: el archivo se descarga y la pagina se queda. #}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="zs-dash">
+    <div class="zs-hero">
+        <div>
+            <h1>{{ title }}</h1>
+            <p>Elige el rango de fechas y se descarga un archivo .xlsx.{% if help %} {{ help }}{% endif %}</p>
+        </div>
+    </div>
+
+    <div class="zs-card">
+        <div class="zs-card-head">
+            <h3><span class="material-symbols-outlined">date_range</span> Rango de fechas</h3>
+        </div>
+        <div class="zs-card-body">
+            <form method="get" class="zs-form" id="zs-excel" autocomplete="off">
+                {% if form.non_field_errors %}
+                    <p class="zs-note is-bad">
+                        <span class="material-symbols-outlined">error</span>
+                        {{ form.non_field_errors|join:" " }}
+                    </p>
+                {% endif %}
+
+                <div class="zs-excel-presets">
+                    {% for label, desde, hasta in presets %}
+                        <button type="button" class="zs-btn"
+                                onclick="var f = document.getElementById('zs-excel'); f.desde.value = '{{ desde }}'; f.hasta.value = '{{ hasta }}';">
+                            {{ label }}
+                        </button>
+                    {% endfor %}
+                </div>
+
+                <div class="zs-excel-dates">
+                    <label class="zs-field">
+                        <span>Desde</span>
+                        <input type="date" name="desde" required
+                               value="{{ form.desde.value|date:'Y-m-d'|default:form.desde.value|default:'' }}">
+                        {% for e in form.desde.errors %}<small class="zs-field-error">{{ e }}</small>{% endfor %}
+                    </label>
+                    <label class="zs-field">
+                        <span>Hasta</span>
+                        <input type="date" name="hasta" required
+                               value="{{ form.hasta.value|date:'Y-m-d'|default:form.hasta.value|default:'' }}">
+                        {% for e in form.hasta.errors %}<small class="zs-field-error">{{ e }}</small>{% endfor %}
+                    </label>
+                </div>
+
+                {% if form.modo %}
+                    <div class="zs-field">
+                        <span>{{ form.modo.label }}</span>
+                        <div class="zs-reasons">
+                            {% for opcion in form.modo %}
+                                <label class="zs-reason">{{ opcion.tag }}<span>{{ opcion.choice_label }}</span></label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="zs-form-actions">
+                    <a href="{{ back_url }}" class="zs-btn zs-btn--lg">Volver a la lista</a>
+                    <button type="submit" class="zs-btn zs-btn--lg zs-btn--solid">
+                        <span class="material-symbols-outlined">download</span>
+                        Descargar Excel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

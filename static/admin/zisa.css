@@ -1241,6 +1241,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 .zs-reason input {
   accent-color: var(--zs-accent);
+  flex: none;
   height: 16px;
   margin: 0;
   width: 16px;
@@ -3348,4 +3349,41 @@ button.zs-tl-label:hover {
 
 .dark .zs-plan-scroll {
   color-scheme: dark;
+}
+
+/* ===================================================================== */
+/* Descarga en Excel (templates/admin/excel_export.html)                 */
+/* ===================================================================== */
+
+.zs-excel-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.zs-excel-dates {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  max-width: 520px;
+}
+
+.dark .zs-excel-dates input {
+  color-scheme: dark;
+}
+
+.zs-field-error,
+.zs-note.is-bad {
+  color: var(--zs-bad);
+}
+
+.zs-field-error {
+  font-size: 0.78rem;
+}
+
+/* Dentro de .zs-field los radios no heredan el ancho de los campos de texto. */
+.zs-field .zs-reason input {
+  border: 0;
+  padding: 0;
+  width: 16px;
 }

@@ -289,7 +289,7 @@ UNFOLD = {
         },
     ],
     "LOGIN": {
-        "image": lambda request: static("admin/img/login-salon.jpg"),
+        "image": lambda request: static("admin/img/ZisaRestaurante.jpeg"),
     },
     "SHOW_HISTORY": True,
     "SHOW_VIEW_ON_SITE": False,

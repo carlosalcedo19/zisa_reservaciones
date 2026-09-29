@@ -1,10 +1,13 @@
+from django import forms
 from django.contrib import admin
 from django.db import transaction
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin
 
 from apps.guests.models import Guest, Tag
 from apps.reservations.models import Reservation, WaitlistEntry
+from wapp.excel import ExcelExportMixin, RangeForm, add_sheet, new_workbook
 
 # Las etiquetas llevan el color que elige el equipo, asi que no pueden usar los
 # tonos fijos de .zs-chip: solo toman su forma y le pasan el color por variable.
@@ -22,8 +25,16 @@ class TagAdmin(ModelAdmin):
         return format_html(CHIP, obj.color, obj.name)
 
 
+class GuestRangeForm(RangeForm):
+    modo = forms.ChoiceField(
+        label="Qué clientes", initial="reservaron", widget=forms.RadioSelect,
+        choices=[("reservaron", "Los que tienen reservas en esas fechas"),
+                 ("nuevos", "Los que se registraron en esas fechas")],
+    )
+
+
 @admin.register(Guest)
-class GuestAdmin(ModelAdmin):
+class GuestAdmin(ExcelExportMixin, ModelAdmin):
     list_display = ("name", "phone", "tags_display", "visits", "no_shows_display",
                     "last_visit")
     list_filter = ("marketing_opt_in", "tags", "language")
@@ -32,6 +43,9 @@ class GuestAdmin(ModelAdmin):
     readonly_fields = ("visits", "no_shows", "cancellations", "last_visit",
                        "created_at", "updated_at")
     actions = ["action_refresh_counters"]
+    actions_list = ["export_excel"]
+    excel_name = "clientes"
+    excel_form = GuestRangeForm
     warn_unsaved_form = True
     fieldsets = (
         (None, {
@@ -112,3 +126,26 @@ class GuestAdmin(ModelAdmin):
         for qs in self._historial(queryset):
             qs.delete()
         super().delete_queryset(request, queryset)
+
+    def excel_filter(self, queryset, data):
+        if data["modo"] == "nuevos":
+            return queryset.filter(created_at__date__range=(data["desde"], data["hasta"]))
+        return queryset.filter(
+            reservations__service_date__range=(data["desde"], data["hasta"])).distinct()
+
+    def excel_workbook(self, request, queryset):
+        wb = new_workbook()
+        add_sheet(wb, "Clientes", [
+            ("Nombre", 28, None), ("Teléfono", 16, None), ("Correo", 28, None),
+            ("Idioma", 8, None), ("Etiquetas", 30, None), ("Visitas", 9, None),
+            ("No-shows", 10, None), ("Cancelaciones", 13, None),
+            ("Última visita", 13, "date"), ("Acepta marketing", 16, None),
+            ("Notas internas", 40, None), ("Cliente desde", 13, "date"),
+        ], (
+            [g.name, g.phone, g.email, g.language, ", ".join(t.name for t in g.tags.all()),
+             g.visits, g.no_shows, g.cancellations, g.last_visit,
+             "Sí" if g.marketing_opt_in else "No", g.notes,
+             timezone.localtime(g.created_at).date()]
+            for g in queryset.prefetch_related("tags")
+        ))
+        return wb
