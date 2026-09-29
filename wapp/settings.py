@@ -272,11 +272,20 @@ UNFOLD = {
         "light": lambda request: static("admin/img/zisa-logo-negro.png"),
         "dark": lambda request: static("admin/img/zisa-logo-blanco.png"),
     },
+    # El SVG cambia de negro a blanco con el tema del navegador; Safari no lo
+    # entiende y se queda con el PNG negro.
     "SITE_FAVICONS": [
         {
             "rel": "icon",
             "type": "image/png",
-            "href": lambda request: static("admin/img/zisa-logo-blanco.png"),
+            "sizes": "128x128",
+            "href": lambda request: static("admin/img/favicon.png"),
+        },
+        {
+            "rel": "icon",
+            "type": "image/svg+xml",
+            "sizes": "any",
+            "href": lambda request: static("admin/img/favicon.svg"),
         },
     ],
     "LOGIN": {
