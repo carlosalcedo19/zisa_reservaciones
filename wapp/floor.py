@@ -161,13 +161,35 @@ ZONE_LABEL = 34
 ZONE_GAP = 10
 
 
+#: Alto interior normal y el tope al que puede crecer si las filas se pisan.
+PLAN_MAX_H = 440
+PLAN_CROWDED_MAX_H = 720
+
+#: Sillas y aire alrededor del tablero; lo mismo usa el JS que escala las mesas.
+TABLE_CLEARANCE = 38
+
+
 def _inner_height(inner_w, sx, sy):
     """Alto que conserva la proporcion del lienzo 16:9, acotado para caber en pantalla."""
     if sx >= 1 and sy >= 1:
         inner_h = inner_w * (sy * 9) / (sx * 16)
     else:
         inner_h = 0
-    return round(min(440, max(210, inner_h)))
+    return round(min(PLAN_MAX_H, max(210, inner_h)))
+
+
+def _crowded_height(tables, inner_w, inner_h):
+    """Estira el alto hasta que no se pisen las mesas que comparten columna."""
+    need = inner_h
+    for i, a in enumerate(tables):
+        aw, ah = _half(a)
+        for b in tables[i + 1:]:
+            bw, bh = _half(b)
+            dy = abs(a.dy - b.dy)
+            if not dy or abs(a.dx - b.dx) / 100 * inner_w >= aw + bw + TABLE_CLEARANCE:
+                continue
+            need = max(need, (ah + bh + TABLE_CLEARANCE) / (dy / 100))
+    return round(min(PLAN_CROWDED_MAX_H, need))
 
 
 def _grow_box(b, t):
@@ -189,7 +211,7 @@ def _zone_boxes(tables):
     for t in tables:
         b = boxes.setdefault(t.area_id, {
             "name": t.area.name, "icon": _area_icon(t.area.name),
-            "idx": len(boxes) % 4,
+            "idx": getattr(t, "zone_idx", len(boxes)) % 4,
             "x0": 101.0, "x1": -1.0, "y0": 101.0, "y1": -1.0,
             "pl": 0, "pr": 0, "hh": 0,
         })
@@ -289,7 +311,7 @@ def _layout(tables):
 
     ins = PLAN_INSET
     inner_w = PLAN_NOMINAL_W - ins["left"] - ins["right"]
-    inner_h = _inner_height(inner_w, sx, sy)
+    inner_h = _crowded_height(tables, inner_w, _inner_height(inner_w, sx, sy))
     height = inner_h + ins["top"] + ins["bottom"]
 
     boxes = _zone_boxes(tables)
@@ -646,7 +668,7 @@ def _slot_load(tables, start, end):
     return mesas, personas
 
 
-def _occupancy_slots(tables, venue, win_start, win_end, m):
+def _occupancy_slots(tables, base, win_start, win_end, m):
     slots = []
     cursor = win_start
     total_tables = len(tables) or 1
@@ -660,7 +682,7 @@ def _occupancy_slots(tables, venue, win_start, win_end, m):
             "people": personas,
             "pct": round(mesas / total_tables * 100),
             "bar_px": 0,
-            "url": "?" + urlencode({"local": venue.pk, "fecha": f"{local:%Y-%m-%d}",
+            "url": "?" + urlencode({**base, "fecha": f"{local:%Y-%m-%d}",
                                     "hora": f"{local:%H:%M}"}),
             "is_at": cursor <= m.at < fin,
         })
@@ -704,10 +726,24 @@ def _time_options(local_at, win_start, win_end, tz):
     return time_options, hora_elegida
 
 
-def _shifted_url(venue, local_at, minutes):
+def _shifted_url(base, local_at, minutes):
     t = local_at + timedelta(minutes=minutes)
-    return "?" + urlencode({"local": venue.pk, "fecha": f"{t:%Y-%m-%d}",
-                            "hora": f"{t:%H:%M}"})
+    return "?" + urlencode({**base, "fecha": f"{t:%Y-%m-%d}", "hora": f"{t:%H:%M}"})
+
+
+def _zone_tabs(tables, zona, base, moment):
+    """Una pestana por zona: con muchas mesas, ver una sola la agranda en el plano."""
+    tabs, por_zona = [], {}
+    for t in tables:
+        por_zona.setdefault(t.area_id, []).append(t)
+    for i, (area_id, mesas) in enumerate(por_zona.items()):
+        for t in mesas:
+            t.zone_idx = i
+        tabs.append({"id": str(area_id), "name": mesas[0].area.name,
+                     "icon": _area_icon(mesas[0].area.name), "count": len(mesas),
+                     "idx": i, "is_on": zona == str(area_id),
+                     "url": "?" + urlencode({**base, "zona": area_id, **moment})})
+    return tabs
 
 
 def floor_view(request):
@@ -736,12 +772,23 @@ def floor_view(request):
         .select_related("area")
         .order_by("area__sort_order", "code")
     )
+    base = {"local": venue.pk}
+    moment = {} if is_now else {"fecha": f"{local_at:%Y-%m-%d}", "hora": f"{local_at:%H:%M}"}
+    zona = request.GET.get("zona", "")
+    zones = _zone_tabs(tables, zona, base, moment)
+    if any(z["is_on"] for z in zones):
+        tables = [t for t in tables if str(t.area_id) == zona]
+        base["zona"] = zona
+    else:
+        zona = ""
+    ids = {t.id for t in tables}
+    en_zona = (lambda o: o.table_id in ids) if zona else (lambda o: True)
 
-    occupancies = _occupancies(venue, service_date, at)
+    occupancies = [o for o in _occupancies(venue, service_date, at) if en_zona(o)]
     counts, people_in, arriving, payload, all_spans = _fill_tables(
         tables,
         _group_by_table(occupancies),
-        _group_by_table(_finished_occupancies(venue, service_date)),
+        _group_by_table(o for o in _finished_occupancies(venue, service_date) if en_zona(o)),
         m,
     )
     arrivals, freeing = _arrivals_and_freeing(
@@ -757,7 +804,7 @@ def floor_view(request):
 
     _timeline_bars(tables, pct)
     hours = _hour_ticks(win_start, win_end, tz, pct)
-    slots = _occupancy_slots(tables, venue, win_start, win_end, m)
+    slots = _occupancy_slots(tables, base, win_start, win_end, m)
     peak = _slot_peak(slots)
     time_options, hora_elegida = _time_options(local_at, win_start, win_end, tz)
 
@@ -794,9 +841,14 @@ def floor_view(request):
         "tl_has_data": bool(all_spans),
         "is_now": is_now,
         "service_date": service_date,
-        "prev_url": _shifted_url(venue, local_at, -30),
-        "next_url": _shifted_url(venue, local_at, 30),
-        "now_url": "?" + urlencode({"local": venue.pk}),
+        "prev_url": _shifted_url(base, local_at, -30),
+        "next_url": _shifted_url(base, local_at, 30),
+        "now_url": "?" + urlencode(base),
+        "zones": zones if len(zones) > 1 else [],
+        "zone": zona,
+        "all_zones_url": "?" + urlencode({"local": venue.pk, **moment}),
+        "all_tables": sum(z["count"] for z in zones),
+        "table_clearance": TABLE_CLEARANCE,
         "can_edit": request.user.has_perm("venues.change_table"),
         "unplaced": unplaced if unplaced > 1 else 0,
         "positions_url": reverse("floor_positions"),
@@ -814,6 +866,7 @@ def floor_view(request):
             "h": ws_local.hour, "mi": ws_local.minute,
             "total": round(win_total / 60),
             "local": str(venue.pk),
+            "zona": zona,
         },
         "tl_hour_width": 100 / max(1, (len(hours) - 1)),
         "tl_range": f"{ws_local:%H:%M} – {timezone.localtime(win_end, tz):%H:%M}",

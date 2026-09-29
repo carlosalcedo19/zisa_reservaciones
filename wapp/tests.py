@@ -304,6 +304,61 @@ class PlanoLocalesTests(BaseSalaTestCase):
                                                   tzinfo=LIMA))
 
 
+class PlanoZonasTests(PlanoBase):
+    """Con muchas mesas se mira una zona sola; la hora elegida no se pierde."""
+
+    def setUp(self):
+        super().setUp()
+        for mesa, hora in ((self.p1, 20), (self.t3, 19)):
+            services.create_reservation(
+                venue=self.venue, guest=self.guest, starts_at=self.cena(hora=hora, minuto=45),
+                party_size=2, source=Reservation.Source.STAFF, tables=[mesa],
+            )
+
+    def test_pestanas_con_cuantas_mesas_hay(self):
+        r = self.plano_de_la_cena()
+        zonas = {z["name"]: z["count"] for z in r.context["zones"]}
+        self.assertEqual(zonas, {"Salon": 3, "Terraza": 1, "Privado": 2, "Barra": 1})
+        self.assertEqual(r.context["zone"], "")
+        self.assertEqual(r.context["all_tables"], 7)
+        self.assertTrue(all(f"hora={HORA_CENA.replace(':', '%3A')}" in z["url"]
+                            for z in r.context["zones"]))
+
+    def test_una_zona_solo_dibuja_y_cuenta_sus_mesas(self):
+        privado = self.p1.area_id
+        r = self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA, zona=privado)
+        self.assertEqual(r.context["zone"], str(privado))
+        self.assertEqual({t.code for t in r.context[TABLES]}, {"P1", "P2"})
+        self.assertEqual([a["name"] for a in r.context[AREAS]], ["Privado"])
+        self.assertEqual(r.context["stats"]["total"], 2)
+        self.assertEqual([a[TABLES] for a in r.context["arrivals"]], ["P1"])
+        self.assertIn(f"zona={privado}", r.context["prev_url"])
+        self.assertIn(f"zona={privado}", r.context["tl_slots"][0]["url"])
+        self.assertEqual(r.context["tl_window"]["zona"], str(privado))
+        self.assertContains(r, f'name="zona" value="{privado}"')
+
+    def test_zona_desconocida_muestra_todas(self):
+        r = self.plano(fecha=self.dia().isoformat(), hora=HORA_CENA, zona="no-existe")
+        self.assertEqual(r.context["zone"], "")
+        self.assertEqual(len(r.context[TABLES]), 7)
+
+
+class PlanoAltoTests(BaseSalaTestCase):
+    def test_filas_apretadas_estiran_el_plano(self):
+        Table.objects.all().delete()
+        for fila in range(8):
+            for col in range(3):
+                Table.objects.create(area=self.area, code=f"M{fila}{col}", min_seats=2,
+                                     max_seats=4, pos_x=10 + col * 40, pos_y=5 + fila * 12)
+        mesas = list(Table.objects.select_related("area"))
+        for t in mesas:
+            floor._draw_table(t, "free", 0, None, None)
+        alto, _ = floor._layout(mesas)
+        base = floor.PLAN_MAX_H + floor.PLAN_INSET["top"] + floor.PLAN_INSET["bottom"]
+        self.assertGreater(alto, base)
+        self.assertLessEqual(alto - base, floor.PLAN_CROWDED_MAX_H - floor.PLAN_MAX_H)
+
+
 class PlanoPosicionesTests(BaseSalaTestCase):
     def enviar(self, user, cuerpo):
         self.client.force_login(user)

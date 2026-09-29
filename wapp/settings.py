@@ -173,7 +173,7 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # Brevo no admite imagenes en linea: el logo va por URL publica.
 EMAIL_LOGO_URL = env(
     "EMAIL_LOGO_URL",
-    f"https://{RENDER_EXTERNAL_HOSTNAME}/static/admin/img/zisa-logo.png"
+    f"https://{RENDER_EXTERNAL_HOSTNAME}/static/admin/img/zisa-logo-negro.png"
     if RENDER_EXTERNAL_HOSTNAME else "",
 )
 
@@ -266,12 +266,15 @@ UNFOLD = {
     "SITE_SUBHEADER": "Panel de reservaciones",
     "SITE_SYMBOL": "restaurant",
     "SITE_URL": None,
-    "SITE_LOGO": lambda request: static("admin/img/zisa-logo.png"),
+    "SITE_LOGO": {
+        "light": lambda request: static("admin/img/zisa-logo-negro.png"),
+        "dark": lambda request: static("admin/img/zisa-logo-blanco.png"),
+    },
     "SITE_FAVICONS": [
         {
             "rel": "icon",
             "type": "image/png",
-            "href": lambda request: static("admin/img/logo_blanco.png"),
+            "href": lambda request: static("admin/img/zisa-logo-blanco.png"),
         },
     ],
     "LOGIN": {

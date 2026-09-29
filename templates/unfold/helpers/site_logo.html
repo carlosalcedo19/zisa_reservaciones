@@ -1,0 +1,14 @@
+{% load i18n %}
+{% comment %}
+Sustituye a la de Unfold: sus clases hidden/dark:block pierden frente a los
+estilos de zisa.css y el logo del otro tema quedaba ocupando sitio.
+{% endcomment %}
+
+<a href="{% url "admin:index" %}" class="zs-site-logo">
+    {% if site_logo.light and site_logo.dark %}
+        <img src="{{ site_logo.light }}" alt="{% trans 'Home' %}" class="zs-logo-light">
+        <img src="{{ site_logo.dark }}" alt="{% trans 'Home' %}" class="zs-logo-dark">
+    {% else %}
+        <img src="{{ site_logo }}" alt="{% trans 'Home' %}">
+    {% endif %}
+</a>

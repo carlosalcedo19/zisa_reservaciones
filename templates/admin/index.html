@@ -175,53 +175,53 @@
     {# Cifras del negocio: solo el superusuario. #}
     {% if is_boss %}
     <div class="zs-sum-bar">
-        <div class="zs-sum-title">
-            <h2 class="zs-section">
-                <span class="material-symbols-outlined">insights</span> Resumen
-            </h2>
-            {% if range_summary %}
-                <p>{{ range_summary.start|date:"j M Y" }} – {{ range_summary.end|date:"j M Y" }}
-                   · comparado con {{ range_summary.prev_start|date:"j M" }} – {{ range_summary.prev_end|date:"j M Y" }}</p>
-            {% else %}
-                <p>Esta semana y este mes, junto a lo que viene mañana</p>
-            {% endif %}
-        </div>
-            {# El selector lleva a un rango ya armado; las fechas sueltas envian el formulario cuando estan las dos. #}
-            <form class="zs-range" method="get" action="" x-data
-                  x-on:change="if ($event.target.type === 'date') { const f = $el; if (f.desde.value && f.hasta.value) f.submit(); else try { (f.desde.value ? f.hasta : f.desde).showPicker(); } catch (e) {} }">
-                <div class="zs-seg">
-                    <label class="zs-seg-field">
-                        <span class="material-symbols-outlined" aria-hidden="true">date_range</span>
-                        <span class="zs-sr">Período</span>
-                        <select x-on:change.stop="if ($event.target.value === 'custom') { try { $el.form.desde.showPicker(); } catch (e) {} } else { window.location.search = $event.target.value; }">
-                            <option value=""{% if not range_summary %} selected{% endif %}>Semana y mes</option>
-                            {% for p in range_presets %}
-                                <option value="?{{ p.qs }}"{% if p.selected %} selected{% endif %}>{{ p.label }}</option>
-                            {% endfor %}
-                            <option value="custom"{% if range_custom %} selected{% endif %}>Elegir fechas…</option>
-                        </select>
-                    </label>
-                    <label class="zs-seg-field">
-                        <span class="zs-range-k">Desde</span>
-                        <span>{% if range_summary %}{{ range_summary.start|date:"j M Y" }}{% else %}—{% endif %}</span>
-                        <input type="date" name="desde" value="{{ range_summary.start|date:'Y-m-d' }}" aria-label="Desde"
-                               onclick="try { this.showPicker(); } catch (e) {}">
-                    </label>
-                    <label class="zs-seg-field">
-                        <span class="zs-range-k">Hasta</span>
-                        <span>{% if range_summary %}{{ range_summary.end|date:"j M Y" }}{% else %}—{% endif %}</span>
-                        <input type="date" name="hasta" value="{{ range_summary.end|date:'Y-m-d' }}" aria-label="Hasta"
-                               onclick="try { this.showPicker(); } catch (e) {}">
-                    </label>
-                    {% if range_summary %}
-                        <a href="?" title="Volver a semana y mes" aria-label="Volver a semana y mes">
-                            <span class="material-symbols-outlined">close</span>
-                        </a>
-                    {% endif %}
-                </div>
-                <noscript><button type="submit" class="zs-btn">Ver</button></noscript>
-            </form>
+        <h2 class="zs-section">
+            <span class="material-symbols-outlined">insights</span> Resumen
+        </h2>
+        {# El selector lleva a un rango ya armado; las fechas sueltas envian el formulario cuando estan las dos. #}
+        <form class="zs-range" method="get" action="" x-data
+              x-on:change="if ($event.target.type === 'date') { const f = $el; if (f.desde.value && f.hasta.value) f.submit(); else try { (f.desde.value ? f.hasta : f.desde).showPicker(); } catch (e) {} }">
+            <div class="zs-seg">
+                <label class="zs-seg-field">
+                    <span class="material-symbols-outlined" aria-hidden="true">date_range</span>
+                    <span class="zs-sr">Período</span>
+                    <select x-on:change.stop="if ($event.target.value === 'custom') { try { $el.form.desde.showPicker(); } catch (e) {} } else { window.location.search = $event.target.value; }">
+                        <option value=""{% if not range_summary %} selected{% endif %}>Semana y mes</option>
+                        {% for p in range_presets %}
+                            <option value="?{{ p.qs }}"{% if p.selected %} selected{% endif %}>{{ p.label }}</option>
+                        {% endfor %}
+                        <option value="custom"{% if range_custom %} selected{% endif %}>Elegir fechas…</option>
+                    </select>
+                </label>
+                <label class="zs-seg-field">
+                    <span class="zs-range-k">Desde</span>
+                    <span>{% if range_summary %}{{ range_summary.start|date:"j M Y" }}{% else %}—{% endif %}</span>
+                    <input type="date" name="desde" value="{{ range_summary.start|date:'Y-m-d' }}" aria-label="Desde"
+                           onclick="try { this.showPicker(); } catch (e) {}">
+                </label>
+                <label class="zs-seg-field">
+                    <span class="zs-range-k">Hasta</span>
+                    <span>{% if range_summary %}{{ range_summary.end|date:"j M Y" }}{% else %}—{% endif %}</span>
+                    <input type="date" name="hasta" value="{{ range_summary.end|date:'Y-m-d' }}" aria-label="Hasta"
+                           onclick="try { this.showPicker(); } catch (e) {}">
+                </label>
+                {% if range_summary %}
+                    <a href="?" title="Volver a semana y mes" aria-label="Volver a semana y mes">
+                        <span class="material-symbols-outlined">close</span>
+                    </a>
+                {% endif %}
+            </div>
+            <noscript><button type="submit" class="zs-btn">Ver</button></noscript>
+        </form>
     </div>
+    <p class="zs-sum-sub">
+        {% if range_summary %}
+            {{ range_summary.start|date:"j M Y" }} – {{ range_summary.end|date:"j M Y" }}
+            · comparado con {{ range_summary.prev_start|date:"j M" }} – {{ range_summary.prev_end|date:"j M Y" }}
+        {% else %}
+            Esta semana y este mes, junto a lo que viene mañana
+        {% endif %}
+    </p>
 
     <div class="zs-sum">
         {% with t=summary.tomorrow %}

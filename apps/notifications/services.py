@@ -15,7 +15,7 @@ from apps.notifications.models import Notification
 
 logger = logging.getLogger("apps.reservations")
 
-LOGO = Path(settings.BASE_DIR) / "static" / "admin" / "img" / "zisa-logo.png"
+LOGO = Path(settings.BASE_DIR) / "static" / "admin" / "img" / "zisa-logo-negro.png"
 
 SUBJECTS = {
     Notification.Template.CONFIRMATION: "Tu reserva en {venue} está confirmada ({code})",

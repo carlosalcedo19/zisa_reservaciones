@@ -1742,7 +1742,60 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 .zs-plan-card .zs-card-head {
   align-items: center;
   border-bottom: 1px solid var(--zs-line-soft);
+  flex-wrap: wrap;
   padding-bottom: 12px;
+}
+
+/* Zonas del plano como control segmentado. */
+.zs-zones {
+  border: 1px solid var(--zs-line);
+  border-radius: var(--zs-radius);
+  display: flex;
+  height: 32px;
+  margin-left: auto;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.zs-zones a {
+  align-items: center;
+  color: var(--zs-ink-soft);
+  display: flex;
+  font-size: 0.8rem;
+  font-weight: 500;
+  gap: 5px;
+  padding: 0 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.zs-zones a + a {
+  border-left: 1px solid var(--zs-line);
+}
+
+.zs-zones a:hover {
+  background: var(--zs-surface-2);
+  color: var(--zs-ink);
+}
+
+.zs-zones a.is-on {
+  background: var(--zs-accent);
+  color: var(--zs-on-accent);
+}
+
+.zs-zones .material-symbols-outlined {
+  color: inherit;
+  font-size: 16px;
+}
+
+.zs-zones small {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.zs-zones + .zs-btn {
+  margin-left: 0;
 }
 
 /* En pantallas estrechas el plano se desplaza dentro de su tarjeta, no la pagina. */
@@ -1802,7 +1855,8 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
   height: var(--h);
   padding: 0;
   position: absolute;
-  transform: translate(-50%, -50%);
+  /* --s lo pone el JS del plano cuando las mesas no caben a tamano real. */
+  transform: translate(-50%, -50%) scale(var(--s, 1));
   transition: transform 0.15s ease;
   width: var(--w);
 }
@@ -1883,7 +1937,16 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 }
 
 .zs-ft:hover {
-  transform: translate(-50%, -50%) scale(1.06);
+  transform: translate(-50%, -50%) scale(calc(var(--s, 1) * 1.06));
+}
+
+/* Mesas achicadas: solo el codigo, mas grande para que se lea. El color ya dice el estado. */
+.zs-plan.is-compact .zs-ft-top small {
+  display: none;
+}
+
+.zs-plan.is-compact .zs-ft-top b {
+  font-size: 1.3rem;
 }
 
 .zs-ft:focus-visible {
@@ -2003,7 +2066,7 @@ html.dark .bg-primary-600 > .material-symbols-outlined {
 
 .zs-plan.is-editing .zs-ft.is-dragging {
   cursor: grabbing;
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: translate(-50%, -50%) scale(calc(var(--s, 1) * 1.1));
   transition: none;
   z-index: 5;
 }
@@ -2567,12 +2630,24 @@ button.zs-tl-label:hover {
 /* Logo                                                                  */
 /* ===================================================================== */
 
-/* El logo es negro sobre transparente: en oscuro se invierte a blanco. */
-.dark img[src*="zisa-logo"] {
-  filter: invert(1);
+/* Negro en claro y blanco en oscuro: cada tema carga su archivo. El
+   !important gana a los display propios del logo (p. ej. .zs-login-logo). */
+.zs-logo-dark,
+.dark .zs-logo-light {
+  display: none !important;
 }
 
-#nav-sidebar img[src*="zisa-logo"] {
+.dark .zs-logo-dark {
+  display: block !important;
+}
+
+.zs-site-logo {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.zs-site-logo img {
+  display: block;
   height: 38px;
   width: auto;
 }
@@ -3205,23 +3280,24 @@ button.zs-tl-label:hover {
 /* Panel: filtro de fechas del resumen (solo superusuario)               */
 /* ===================================================================== */
 
+/* Titulo y filtro en la misma linea; la aclaracion del periodo va debajo. */
 .zs-sum-bar {
-  align-items: flex-end;
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 10px 16px;
   justify-content: space-between;
-  margin: 14px 0 -2px;
+  margin: 14px 0 0;
 }
 
-.zs-sum-title .zs-section {
+.zs-sum-bar .zs-section {
   margin: 0;
 }
 
-.zs-sum-title p {
+.zs-sum-sub {
   color: var(--zs-ink-faint);
   font-size: 0.8rem;
-  margin: 3px 0 0 29px;
+  margin: -12px 0 -2px 29px;
 }
 
 .zs-range .zs-seg {
