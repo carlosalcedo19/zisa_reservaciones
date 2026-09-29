@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 
 from django.contrib.auth.models import Permission, User
 from django.contrib.messages import get_messages
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -47,6 +47,13 @@ def _staff(username, *codenames):
     if codenames:
         user.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
     return user
+
+
+def _pedido_del_jefe(**params):
+    """Peticion al panel como superusuario, sin pasar por la vista."""
+    request = RequestFactory().get("/admin/", params)
+    request.user = User(username="jefe", is_superuser=True, is_staff=True)
+    return request
 
 
 def _mensajes(response):
@@ -472,7 +479,7 @@ class PanelInicioTests(BaseSalaTestCase):
             starts_at=datetime.combine(manana, time(21), tzinfo=LIMA),
             source=Reservation.Source.STAFF,
         ), reason="Cambio de planes")
-        resumen = dashboard_callback(None, {})[SUMMARY]
+        resumen = dashboard_callback(_pedido_del_jefe(), {})[SUMMARY]
 
         self.assertEqual(resumen[TOMORROW]["date"], manana)
         self.assertEqual(len(resumen[TOMORROW]["rows"]), 2)
@@ -485,6 +492,53 @@ class PanelInicioTests(BaseSalaTestCase):
         self.assertEqual(resumen[MONTH]["no_shows"], 1)
         self.assertGreater(resumen[MONTH]["no_show_rate"], 0)
         self.assertIsNotNone(resumen[MONTH]["best_day"])
+
+    def test_el_equipo_solo_ve_el_resumen_de_manana(self):
+        ctx = dashboard_callback(None, {})
+        self.assertFalse(ctx["is_boss"])
+        self.assertEqual(set(ctx[SUMMARY]), {TOMORROW})
+        self.assertNotIn("range_summary", ctx)
+
+        self.client.force_login(_staff("host", "view_reservation"))
+        r = self.client.get(reverse("admin:index"), {"desde": "2026-01-01", "hasta": "2026-01-31"})
+        self.assertNotContains(r, "Esta semana")
+        self.assertNotContains(r, 'name="desde"')
+
+    def test_el_jefe_filtra_el_resumen_por_fechas(self):
+        desde = self.hoy - timedelta(days=6)
+        ctx = dashboard_callback(
+            _pedido_del_jefe(desde=desde.isoformat(), hasta=self.hoy.isoformat()), {})
+        rango = ctx["range_summary"]
+        self.assertEqual((rango["start"], rango["end"], rango["days"]), (desde, self.hoy, 7))
+        self.assertEqual(len(rango["bars"]), 7)
+        self.assertTrue(rango["bars"][-1]["is_today"])
+        self.assertEqual(rango["no_shows"], 1)
+        self.assertGreaterEqual(rango["people"], 5)
+        self.assertEqual(rango["prev_end"], desde - timedelta(days=1))
+        self.assertIsNotNone(rango["change"])  # hace 7 dias vino gente
+        self.assertIn(f"service_date_from={desde.isoformat()}", rango["url"])
+
+    def test_rango_al_reves_largo_o_invalido(self):
+        hasta, desde = self.hoy, self.hoy - timedelta(days=500)
+        rango = dashboard_callback(
+            _pedido_del_jefe(desde=hasta.isoformat(), hasta=desde.isoformat()), {}
+        )["range_summary"]
+        self.assertEqual(rango["end"], hasta)
+        self.assertEqual(rango["days"], 366)
+        self.assertEqual(rango["bars"], [])
+        self.assertIsNone(
+            dashboard_callback(_pedido_del_jefe(desde="ayer", hasta="hoy"), {})["range_summary"])
+
+    def test_la_portada_del_jefe_muestra_el_filtro(self):
+        self.client.force_login(User.objects.create_superuser(
+            "jefe", password=secrets.token_urlsafe()))
+        r = self.client.get(reverse("admin:index"))
+        self.assertContains(r, "Esta semana")
+        self.assertContains(r, 'name="desde"')
+        r = self.client.get(reverse("admin:index"),
+                            {"desde": self.hoy.isoformat(), "hasta": self.hoy.isoformat()})
+        self.assertContains(r, "Ver las reservas del período")
+        self.assertNotContains(r, "Esta semana")
 
     def test_turno_que_cruza_la_medianoche(self):
         Shift.objects.filter(venue=self.venue).update(end_time=time(1, 0))
@@ -514,7 +568,7 @@ class PanelInicioTests(BaseSalaTestCase):
 class PanelVacioTests(TestCase):
     def test_sin_mesas_ni_reservas(self):
         Venue.objects.create(name="Zisa", timezone="America/Lima")
-        ctx = dashboard_callback(None, {})
+        ctx = dashboard_callback(_pedido_del_jefe(), {})
         self.assertEqual(ctx["day_kpis"][0]["hint"], "sin mesas cargadas")
         self.assertEqual(ctx[NOW_KPIS][1]["hint"], "sala completa")
         self.assertEqual(ctx[NOW_KPIS][2]["hint"], "nadie con retraso")

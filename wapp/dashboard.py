@@ -1,6 +1,6 @@
 """Datos del panel de inicio (Unfold -> dashboard_callback -> templates/admin/index.html)."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.db.models import Count, Sum
 from django.urls import reverse
@@ -39,6 +39,8 @@ CAME = (
 MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
                "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 DAY_LETTERS = ["L", "M", "X", "J", "V", "S", "D"]
+MAX_RANGE_DAYS = 366
+MAX_BARS = 31
 
 
 def _pct_change(now, before):
@@ -173,7 +175,78 @@ def _month_summary(by_day, today, month_start, month_end, prev_month_start, list
     }
 
 
-def _summary(venue, today, list_url):
+def _parse_range(request, today):
+    """Rango de ?desde=&hasta= (AAAA-MM-DD); None si falta o no se entiende."""
+    params = getattr(request, "GET", {})
+    try:
+        start = date.fromisoformat(params.get("desde", ""))
+        end = date.fromisoformat(params.get("hasta", ""))
+    except ValueError:
+        return None
+    if start > end:
+        start, end = end, start
+    return max(start, end - timedelta(days=MAX_RANGE_DAYS - 1)), end
+
+
+def _range_bars(by_day, start, end, today):
+    bars = []
+    day = start
+    while day <= end:
+        bars.append({"letter": DAY_LETTERS[day.weekday()], "number": day.day,
+                     "people": _people_on(by_day, day),
+                     "is_today": day == today, "is_future": day > today})
+        day += timedelta(days=1)
+    top = max((b["people"] for b in bars), default=0) or 1
+    for b in bars:
+        b["pct"] = round(b["people"] / top * 100)
+    return bars
+
+
+def _range_summary(venue, start, end, today, list_url):
+    """Se compara con el mismo numero de dias justo antes del rango."""
+    days = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=days - 1)
+    by_day = _counts_by_day(venue, prev_start, end)
+    t = _tally(by_day, start, end)
+    prev = _tally(by_day, prev_start, prev_end)
+    best_day, best_people = _best_day(by_day, start, end)
+    booked = t["reservations"]
+    qs = urlencode({"service_date_from": start.isoformat(),
+                    "service_date_to": end.isoformat()})
+    return {
+        **t,
+        "start": start,
+        "end": end,
+        "days": days,
+        "prev_start": prev_start,
+        "prev_end": prev_end,
+        "bars": _range_bars(by_day, start, end, today) if days <= MAX_BARS else [],
+        "change": _pct_change(t["people"], prev["people"]),
+        "no_show_rate": round(t["no_shows"] / booked * 100) if booked else 0,
+        "avg_party": round(t["people"] / booked, 1) if booked else 0,
+        "best_day": best_day,
+        "best_people": best_people,
+        "url": f"{list_url}?{qs}",
+    }
+
+
+def _range_presets(today, picked):
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    prev_month_end = month_start - timedelta(days=1)
+    presets = [
+        ("Últimos 7 días", today - timedelta(days=6), today),
+        ("Últimos 30 días", today - timedelta(days=29), today),
+        ("Semana pasada", week_start - timedelta(days=7), week_start - timedelta(days=1)),
+        ("Mes pasado", prev_month_end.replace(day=1), prev_month_end),
+    ]
+    return [{"label": label, "selected": picked == (start, end),
+             "qs": urlencode({"desde": start.isoformat(), "hasta": end.isoformat()})}
+            for label, start, end in presets]
+
+
+def _summary(venue, today, list_url, full=True):
     """Manana, semana (lun-dom) y mes, todo de una sola consulta agrupada."""
     tomorrow = today + timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
@@ -188,6 +261,8 @@ def _summary(venue, today, list_url):
         min(prev_month_start, week_start - timedelta(days=7)),
         max(month_end, week_end, tomorrow),
     )
+    if not full:
+        return {"tomorrow": _tomorrow_summary(venue, by_day, tomorrow, list_url)}
     return {
         "tomorrow": _tomorrow_summary(venue, by_day, tomorrow, list_url),
         "week": _week_summary(by_day, today, week_start, week_end),
@@ -373,7 +448,7 @@ def _sources(venue, today):
     return source_labels, source_values
 
 
-def dashboard_callback(_request, context):
+def dashboard_callback(request, context):
     venue = Venue.objects.filter(is_active=True).order_by("name").first()
     if venue is None:
         return _empty(context)
@@ -428,11 +503,23 @@ def dashboard_callback(_request, context):
 
     _decorate_upcoming(upcoming, overdue, tz, reverse("admin:index"))
 
+    # Semana, mes y rango son cifras del negocio: solo para el superusuario.
+    is_boss = getattr(getattr(request, "user", None), "is_superuser", False)
+    if is_boss:
+        picked = _parse_range(request, today)
+        presets = _range_presets(today, picked)
+        context.update({
+            "range_presets": presets,
+            "range_custom": bool(picked) and not any(p["selected"] for p in presets),
+            "range_summary": picked and _range_summary(venue, *picked, today, list_url),
+        })
+
     hourly_labels, hourly_values = _hourly(venue, today, tz, live)
     source_labels, source_values = _sources(venue, today)
 
     context.update({
         "dashboard_ready": True,
+        "is_boss": is_boss,
         "venue": venue,
         "service_date": today,
         "now_kpis": _now_kpis(seated_now, free_tables, overdue, grace),
@@ -452,7 +539,7 @@ def dashboard_callback(_request, context):
         "upcoming_total": len(upcoming),
         "overdue_count": len(overdue),
         "today_url": today_url,
-        "summary": _summary(venue, today, list_url),
+        "summary": _summary(venue, today, list_url, full=is_boss),
         "overdue_url": f"{today_url}&{urlencode({'status__in': 'pending,confirmed'})}",
     })
     return context

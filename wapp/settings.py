@@ -267,6 +267,13 @@ UNFOLD = {
     "SITE_SYMBOL": "restaurant",
     "SITE_URL": None,
     "SITE_LOGO": lambda request: static("admin/img/zisa-logo.png"),
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "type": "image/png",
+            "href": lambda request: static("admin/img/logo_blanco.png"),
+        },
+    ],
     "LOGIN": {
         "image": lambda request: static("admin/img/login-salon.jpg"),
     },

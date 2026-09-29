@@ -3200,3 +3200,101 @@ button.zs-tl-label:hover {
   font-size: 0.76rem;
   margin: 0;
 }
+
+/* ===================================================================== */
+/* Panel: filtro de fechas del resumen (solo superusuario)               */
+/* ===================================================================== */
+
+.zs-sum-bar {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: space-between;
+  margin: 14px 0 -2px;
+}
+
+.zs-sum-title .zs-section {
+  margin: 0;
+}
+
+.zs-sum-title p {
+  color: var(--zs-ink-faint);
+  font-size: 0.8rem;
+  margin: 3px 0 0 29px;
+}
+
+.zs-range .zs-seg {
+  max-width: 100%;
+}
+
+.zs-range .zs-seg-field:first-child {
+  border-left: 0;
+}
+
+.zs-range-k {
+  color: var(--zs-ink-faint);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.dark .zs-range select {
+  color-scheme: dark;
+}
+
+@media (max-width: 720px) {
+  .zs-range,
+  .zs-range .zs-seg {
+    width: 100%;
+  }
+
+  .zs-range .zs-seg-field {
+    flex: 1;
+    padding: 0 8px;
+  }
+}
+
+.zs-sum--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.zs-sum-card--wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 1200px) {
+  .zs-sum-card--wide {
+    grid-column: auto;
+  }
+}
+
+.zs-sum-split {
+  border-top: 1px solid var(--zs-line-soft);
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr);
+}
+
+.zs-sum-split > :only-child {
+  grid-column: 1 / -1;
+}
+
+.zs-sum-split .zs-week,
+.zs-sum-split .zs-sum-stats {
+  border-top: 0;
+}
+
+.zs-week--range {
+  gap: 3px;
+}
+
+.zs-week--range .zs-week-day em,
+.zs-week--range .zs-week-day span {
+  font-size: 0.62rem;
+}
+
+@media (max-width: 720px) {
+  .zs-sum-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
