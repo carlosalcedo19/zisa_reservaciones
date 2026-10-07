@@ -138,7 +138,7 @@ class PlanoEstadosTests(PlanoBase):
     def reservar(self, mesa, personas, inicio):
         return services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=inicio, party_size=personas,
-            source=Reservation.Source.STAFF, tables=[mesa],
+            source=Reservation.Source.RECEPCION, tables=[mesa],
         )
 
     def test_cada_mesa_tiene_su_estado(self):
@@ -250,7 +250,7 @@ class PlanoAhoraTests(PlanoBase):
     def test_la_barra_atrasada_se_mide_con_la_hora_real(self):
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF, tables=[self.t1],
+            source=Reservation.Source.RECEPCION, tables=[self.t1],
         )
         inicio = timezone.now() - timedelta(minutes=30)
         fin = inicio + timedelta(minutes=90)
@@ -326,7 +326,7 @@ class PlanoZonasTests(PlanoBase):
         for mesa, hora in ((self.p1, 20), (self.t3, 19)):
             services.create_reservation(
                 venue=self.venue, guest=self.guest, starts_at=self.cena(hora=hora, minuto=45),
-                party_size=2, source=Reservation.Source.STAFF, tables=[mesa],
+                party_size=2, source=Reservation.Source.RECEPCION, tables=[mesa],
             )
 
     def test_sin_zona_abre_la_primera(self):
@@ -410,7 +410,7 @@ class PlanoSinReservaTests(BaseSalaTestCase):
 
         self.assertRedirects(r, f"{volver.split('#')[0]}#{self.t1.pk}",
                              fetch_redirect_response=False)
-        reserva = Reservation.objects.get(source=Reservation.Source.WALK_IN)
+        reserva = Reservation.objects.get(source=Reservation.Source.RECEPCION)
         self.assertEqual(reserva.status, Reservation.Status.SEATED)
         self.assertEqual(reserva.internal_notes, "Pedro Soto")
         [aviso] = _mensajes(r)
@@ -464,7 +464,7 @@ class PanelInicioTests(BaseSalaTestCase):
     def reserva_de_hoy(self, mesa, personas, inicio):
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=personas,
-            source=Reservation.Source.STAFF, tables=[mesa],
+            source=Reservation.Source.RECEPCION, tables=[mesa],
         )
         fin = inicio + timedelta(minutes=90)
         Reservation.objects.filter(pk=reserva.pk).update(
@@ -513,7 +513,7 @@ class PanelInicioTests(BaseSalaTestCase):
         self.assertEqual(len(ctx["history"]), 7)
         self.assertTrue(ctx["history"][-1]["is_today"])
         self.assertGreaterEqual(ctx["history_total"], 5)
-        self.assertIn("Mostrador / walk-in", ctx["source_labels"])
+        self.assertIn("Recepción", ctx["source_labels"])
         self.assertEqual([s["name"] for s in ctx["shifts"]], ["Cena"])
 
     def test_resumen_de_manana_semana_y_mes(self):
@@ -521,17 +521,17 @@ class PanelInicioTests(BaseSalaTestCase):
         services.create_reservation(
             venue=self.venue, guest=self.guest, party_size=2, tables=[self.t1],
             starts_at=datetime.combine(manana, time(21), tzinfo=LIMA),
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         pendiente = services.create_reservation(
             venue=self.venue, guest=self.guest, party_size=2, tables=[self.t2],
             starts_at=datetime.combine(manana, time(21), tzinfo=LIMA),
-            source=Reservation.Source.STAFF, status=Reservation.Status.PENDING,
+            source=Reservation.Source.RECEPCION, status=Reservation.Status.PENDING,
         )
         services.cancel(services.create_reservation(
             venue=self.venue, guest=self.guest, party_size=6, tables=[self.t3],
             starts_at=datetime.combine(manana, time(21), tzinfo=LIMA),
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         ), reason="Cambio de planes")
         resumen = dashboard_callback(_pedido_del_jefe(), {})[SUMMARY]
 

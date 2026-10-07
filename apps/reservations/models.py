@@ -51,8 +51,7 @@ class Reservation(models.Model):
         WHATSAPP = "whatsapp", "WhatsApp"
         INSTAGRAM = "instagram", "Instagram"
         FACEBOOK = "facebook", "Facebook"
-        WALK_IN = "walk_in", "Mostrador / walk-in"
-        STAFF = "staff", "Personal"
+        RECEPCION = "recepcion", "Recepción"
       
 
     class DepositStatus(models.TextChoices):

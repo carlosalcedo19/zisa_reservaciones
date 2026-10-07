@@ -315,6 +315,7 @@ def create_reservation(
     details=None,
     user=None,
     status=None,
+    skip_calendar=False,
 ):
     details = details or ReservationDetails()
     policy = policy_for(venue)
@@ -329,8 +330,8 @@ def create_reservation(
     ends_at = starts_at + timedelta(minutes=duration)
 
     validate_lead_time(venue, starts_at, source)
-    if source == Reservation.Source.WALK_IN:
-        # Walk-in se salta turnos y ultima entrada: decide el anfitrion.
+    if skip_calendar:
+        # Quien llega sin reserva se salta turnos y ultima entrada: decide el anfitrion.
         shift = shift_for(venue, starts_at)
     else:
         shift = validate_calendar(venue, starts_at)
@@ -606,8 +607,8 @@ def seat_walk_in(venue, table, party_size, name="", phone="", user=None, now=Non
     guest = get_or_create_guest(phone, name or WALK_IN_NAME) if phone else walk_in_guest()
     reservation = create_reservation(
         venue=venue, guest=guest, starts_at=now, party_size=party_size,
-        source=Reservation.Source.WALK_IN, tables=[table], duration_min=duration,
-        user=user, status=Reservation.Status.SEATED,
+        source=Reservation.Source.RECEPCION, tables=[table], duration_min=duration,
+        user=user, status=Reservation.Status.SEATED, skip_calendar=True,
         details=ReservationDetails(internal_notes=(name if name and not phone else "")),
     )
     reservation.seated_at = now

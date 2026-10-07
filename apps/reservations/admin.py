@@ -229,7 +229,7 @@ class ReservationForm(forms.ModelForm):
         # El pk UUID tiene default, asi que el alta se detecta con _state, no con pk.
         if self.instance._state.adding:
             if "source" in self.fields and "source" not in pedido:
-                self.initial["source"] = Reservation.Source.STAFF
+                self.initial["source"] = Reservation.Source.RECEPCION
             if "venue" in self.fields and "venue" not in pedido:
                 venue = default_venue()
                 if venue is not None:
@@ -290,7 +290,7 @@ class ReservationForm(forms.ModelForm):
             services.validate_not_past(venue, starts_at)
             if es_alta:
                 services.validate_lead_time(
-                    venue, starts_at, cleaned.get("source") or Reservation.Source.STAFF
+                    venue, starts_at, cleaned.get("source") or Reservation.Source.RECEPCION
                 )
             services.validate_calendar(venue, starts_at)
 

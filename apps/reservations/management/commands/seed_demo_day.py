@@ -22,7 +22,7 @@ PEOPLE = [
     ("Luis Salas", "+51987000005", time(20, 0), 2, "whatsapp", "", "confirmed"),
     ("Rita Ibanez", "+51987000006", time(20, 30), 2, "web", "Aniversario", "confirmed"),
     ("Kenji Nakamura", "+51987000007", time(21, 0), 3, "web", "", "confirmed"),
-    ("Sofia Delgado", "+51987000008", time(21, 0), 4, "staff", "Negocios", "confirmed"),
+    ("Sofia Delgado", "+51987000008", time(21, 0), 4, "recepcion", "Negocios", "confirmed"),
 ]
 
 
@@ -62,10 +62,10 @@ class Command(BaseCommand):
             guest = services.get_or_create_guest(phone, name)
             starts_at = datetime.combine(today, at, tzinfo=tz)
             try:
-                # Como STAFF para saltar la antelacion web; el origen se cambia despues.
+                # Como RECEPCION para saltar la antelacion web; el origen se cambia despues.
                 reservation = services.create_reservation(
                     venue=venue, guest=guest, starts_at=starts_at, party_size=party,
-                    source=Reservation.Source.STAFF,
+                    source=Reservation.Source.RECEPCION,
                     details=services.ReservationDetails(
                         occasion=occasion,
                         internal_notes=f"{DEMO_TAG} generada por seed_demo_day",

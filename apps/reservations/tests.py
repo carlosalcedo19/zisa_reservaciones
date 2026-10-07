@@ -234,7 +234,7 @@ class BorradoTests(BaseSalaTestCase):
         )
         self.reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         services.seat(self.reserva)  # nace confirmada; sentar deja otro movimiento
 
@@ -388,7 +388,7 @@ class TareaNoShowTests(BaseSalaTestCase):
         """Reserva confirmada que empezo hace `minutos` y nadie llego."""
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         self.assertEqual(reserva.status, Reservation.Status.CONFIRMED)
         inicio = timezone.now() - timedelta(minutes=minutos)
@@ -431,7 +431,7 @@ class WalkInTests(BaseSalaTestCase):
     def test_sienta_en_el_acto_y_ocupa_la_mesa(self):
         r = services.seat_walk_in(self.venue, self.t1, 3, now=self.ahora())
         self.assertEqual(r.status, Reservation.Status.SEATED)
-        self.assertEqual(r.source, Reservation.Source.WALK_IN)
+        self.assertEqual(r.source, Reservation.Source.RECEPCION)
         self.assertEqual(r.guest.name, services.WALK_IN_NAME)
         self.assertEqual(r.table_codes, "S1")
         self.assertEqual(r.duration_min, 90)
@@ -454,7 +454,7 @@ class WalkInTests(BaseSalaTestCase):
         services.create_reservation(
             venue=self.venue, guest=self.guest, party_size=2, tables=[self.t1],
             starts_at=self.ahora() + timedelta(minutes=60),
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         r = services.seat_walk_in(self.venue, self.t1, 2, now=self.ahora())
         self.assertEqual(r.duration_min, 60)
@@ -464,7 +464,7 @@ class WalkInTests(BaseSalaTestCase):
         services.create_reservation(
             venue=self.venue, guest=self.guest, party_size=2, tables=[self.t1],
             starts_at=self.ahora() + timedelta(minutes=20),
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         with self.assertRaises(services.NoAvailability):
             services.seat_walk_in(self.venue, self.t1, 2, now=self.ahora())
@@ -581,7 +581,7 @@ class AdminReservaFormTests(BaseSalaTestCase):
         return ReservationForm(data={
             "venue": self.venue.pk, "guest": self.guest.pk,
             "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
-            "party_size": 2, "source": Reservation.Source.STAFF,
+            "party_size": 2, "source": Reservation.Source.RECEPCION,
         })
 
     def test_no_se_reserva_en_un_dia_que_ya_paso(self):
@@ -594,13 +594,13 @@ class AdminReservaFormTests(BaseSalaTestCase):
 
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         ayer = timezone.localtime(self.cena(dias_desde_hoy=-1))
         form = ReservationForm(instance=reserva, data={
             "venue": self.venue.pk, "guest": self.guest.pk,
             "starts_at_0": f"{ayer:%Y-%m-%d}", "starts_at_1": f"{ayer:%H:%M}",
-            "party_size": 2, "source": Reservation.Source.STAFF,
+            "party_size": 2, "source": Reservation.Source.RECEPCION,
             "status": reserva.status, "deposit_status": reserva.deposit_status,
             "children": 0, "high_chairs": 0,
         })
@@ -636,7 +636,7 @@ class AdminReservaFormTests(BaseSalaTestCase):
 
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(hora=20, minuto=15),
-            party_size=2, source=Reservation.Source.STAFF,
+            party_size=2, source=Reservation.Source.RECEPCION,
         )
         html = str(ReservationForm(instance=reserva)[STARTS_AT])
         self.assertIn('<option value="20:15" selected>', html)
@@ -745,7 +745,7 @@ class AdminReservaFormTests(BaseSalaTestCase):
             "venue": self.venue.pk, "guest": self.guest.pk,
             "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
             "party_size": 8, "children": 0, "high_chairs": 0,
-            "source": Reservation.Source.STAFF, "combine": "on",
+            "source": Reservation.Source.RECEPCION, "combine": "on",
             "tables": [str(self.t1.pk), str(self.t2.pk)],
         })
         self.assertEqual(respuesta.status_code, 302, getattr(respuesta, "context", None)
@@ -759,7 +759,7 @@ class AdminReservaFormTests(BaseSalaTestCase):
 
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         ma = admin.site._registry[Reservation]
         self.assertEqual(ma.get_readonly_fields(None), [])
@@ -818,7 +818,7 @@ class BorrarClienteTests(BaseSalaTestCase):
         self.jefe = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
         self.reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         WaitlistEntry.objects.create(venue=self.venue, guest=self.guest, date=date.today(),
                                      desired_time=time(20, 0), party_size=2)
@@ -860,11 +860,11 @@ class ExcelTests(BaseSalaTestCase):
         self.jefe = User.objects.create_superuser("jefe", password=secrets.token_urlsafe())
         self.manana = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(hora=21), party_size=3,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         self.pasado = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(2), party_size=2,
-            source=Reservation.Source.STAFF,
+            source=Reservation.Source.RECEPCION,
         )
         services.cancel(self.pasado, reason="Cambio de planes")
         self.client.force_login(self.jefe)
