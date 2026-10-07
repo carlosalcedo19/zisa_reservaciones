@@ -8,6 +8,7 @@ from django import forms
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib import admin, messages
+from django.db.models import Prefetch
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -17,14 +18,15 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.forms.widgets import MultiWidget
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.widgets import (
-    UnfoldAdminDateWidget, UnfoldAdminSelectWidget, UnfoldAdminSplitDateTimeWidget,
+    UnfoldAdminDateWidget, UnfoldAdminSelectMultipleWidget, UnfoldAdminSelectWidget,
+    UnfoldAdminSplitDateTimeWidget, UnfoldBooleanSwitchWidget,
 )
 from unfold.contrib.filters.admin import RangeDateFilter
 
 from apps.reservations import services
 from apps.guests.models import Guest
 from wapp.excel import ExcelExportMixin, add_sheet, new_workbook
-from apps.venues.models import Venue
+from apps.venues.models import Area, Table, TableCombination, Venue
 from apps.reservations.models import (
     Reservation,
     ReservationEvent,
@@ -129,10 +131,82 @@ class HalfHourSplitDateTimeWidget(UnfoldAdminSplitDateTimeWidget):
         ], attrs)
 
 
+def table_label(mesa):
+    juntable = "" if mesa.is_combinable else " · no se junta"
+    return f"{mesa.code} · {mesa.area.name} ({mesa.min_seats}-{mesa.max_seats}){juntable}"
+
+
+def combination_label(combo, mesas):
+    codigos = "+".join(m.code for m in mesas)
+    nombre = combo.name if combo.name.replace(" ", "") == codigos else f"{combo.name} ({codigos})"
+    return f"{nombre} · juntas ({combo.min_seats}-{combo.max_seats})"
+
+
+class TableSelect(UnfoldAdminSelectWidget):
+    """data-area en cada opcion para que el selector de zona filtre sin ir al servidor."""
+
+    option_attrs = {}
+
+    def create_option(self, name, value, *args, **kwargs):
+        option = super().create_option(name, value, *args, **kwargs)
+        option["attrs"].update(self.option_attrs.get(str(value), {}))
+        return option
+
+
+class TableSelectMultiple(UnfoldAdminSelectMultipleWidget):
+    def create_option(self, name, value, *args, **kwargs):
+        option = super().create_option(name, value, *args, **kwargs)
+        if getattr(value, "instance", None) is not None:
+            option["attrs"]["data-area"] = str(value.instance.area_id)
+            if not value.instance.is_combinable:
+                option["attrs"]["data-solo"] = "1"
+        return option
+
+
+class TableMultipleChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, obj):
+        return table_label(obj)
+
+
+def bookable_tables():
+    return (Table.objects.filter(is_active=True).select_related("area")
+            .order_by("area__sort_order", "code"))
+
+
+def declared_combinations():
+    """Combinaciones activas cuyas mesas siguen todas en servicio, con sus mesas."""
+    combos = (TableCombination.objects.filter(is_active=True)
+              .prefetch_related(Prefetch(
+                  "tables", queryset=Table.objects.select_related("area").order_by("code"))))
+    resultado = []
+    for combo in combos:
+        mesas = list(combo.tables.all())
+        if mesas and all(m.is_active for m in mesas):
+            resultado.append((combo, mesas))
+    return resultado
+
+
 class ReservationForm(forms.ModelForm):
     """Valida antes de guardar para que un choque salga como error de campo y no como IntegrityError."""
 
     starts_at = forms.SplitDateTimeField(label="Inicio", widget=HalfHourSplitDateTimeWidget)
+    # Campos solo del alta: la reasignacion posterior pasa por services.assign_tables.
+    area = forms.ModelChoiceField(
+        label="Zona", queryset=Area.objects.all(), required=False,
+        empty_label="Todas las zonas", widget=UnfoldAdminSelectWidget,
+        help_text="Solo filtra la lista de mesas.",
+    )
+    combine = forms.BooleanField(
+        label="Juntar otras mesas", required=False, widget=UnfoldBooleanSwitchWidget,
+        help_text="Solo si ninguna mesa ni combinación de la lista te sirve.",
+    )
+    # Valores "t:<id>" para una mesa y "c:<id>" para una combinacion declarada.
+    table = forms.ChoiceField(label="Mesa", required=False, widget=TableSelect)
+    tables = TableMultipleChoiceField(
+        label="Mesas a juntar", queryset=bookable_tables(), required=False,
+        widget=TableSelectMultiple(attrs={"size": 8}),
+        help_text="Mantén pulsado Ctrl (⌘ en Mac) para marcar varias.",
+    )
 
     class Meta:
         model = Reservation
@@ -160,6 +234,41 @@ class ReservationForm(forms.ModelForm):
                 venue = default_venue()
                 if venue is not None:
                     self.initial["venue"] = venue.pk
+            if "table" in self.fields:
+                self._load_table_choices()
+
+    def _load_table_choices(self):
+        self._mesas = {f"t:{m.pk}": m for m in bookable_tables()}
+        self._combos = {f"c:{c.pk}": (c, mesas) for c, mesas in declared_combinations()}
+
+        atributos = {v: {"data-area": str(m.area_id)} for v, m in self._mesas.items()}
+        for valor, (_, mesas) in self._combos.items():
+            atributos[valor] = {
+                "data-area": " ".join(sorted({str(m.area_id) for m in mesas})),
+                "data-tables": " ".join(str(m.pk) for m in mesas),
+            }
+
+        opciones = [("", "Que la elija el sistema"),
+                    ("Mesas", [(v, table_label(m)) for v, m in self._mesas.items()])]
+        if self._combos:
+            opciones.append(("Mesas que ya se juntan", [
+                (v, combination_label(c, mesas)) for v, (c, mesas) in self._combos.items()
+            ]))
+        campo = self.fields["table"]
+        campo.choices = opciones
+        campo.widget.option_attrs = atributos
+
+    def _chosen_tables(self, cleaned):
+        """(campo del error, mesas, combinacion declarada o None)."""
+        if cleaned.get("combine"):
+            return "tables", list(cleaned.get("tables") or []) or None, None
+        valor = cleaned.get("table")
+        if valor in self._combos:
+            combo, mesas = self._combos[valor]
+            return "table", mesas, combo
+        if valor in self._mesas:
+            return "table", [self._mesas[valor]], None
+        return "table", None, None
 
     def clean(self):
         cleaned = super().clean()
@@ -186,8 +295,17 @@ class ReservationForm(forms.ModelForm):
             services.validate_calendar(venue, starts_at)
 
             excluir = None if es_alta else self.instance
-            if not services.find_availability(venue, starts_at, ends_at, party_size,
-                                              exclude_reservation=excluir):
+            campo, mesas, combo = (self._chosen_tables(cleaned) if es_alta
+                                   else (None, None, None))
+            cleaned["chosen_tables"] = mesas
+            if mesas:
+                try:
+                    services.validate_tables(venue, starts_at, ends_at, party_size, mesas,
+                                             combination=combo)
+                except services.ReservationError as exc:
+                    raise forms.ValidationError({campo: str(exc)}) from exc
+            elif not services.find_availability(venue, starts_at, ends_at, party_size,
+                                                exclude_reservation=excluir):
                 raise services.NoAvailability(
                     f"No queda mesa libre para {party_size} "
                     f"{'persona' if party_size == 1 else 'personas'} a esa hora."
@@ -327,6 +445,13 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
                            "elige la mesa que mejor encaja y calcula hasta cuándo "
                            "la ocupa. Si no hay hueco, te avisa aquí mismo.",
         }),
+        ("Mesa", {
+            "fields": (("area", "combine"), "table", "tables"),
+            "description": "Opcional. Elige la zona para acotar la lista. En "
+                           "«Mesa» salen las mesas sueltas y las combinaciones que "
+                           "ya se juntan. Si ninguna te sirve, activa «Juntar otras "
+                           "mesas» y marca las que quieras.",
+        }),
         ("Información adicional", {
             "fields": ("occasion", "tags", "guest_notes", "internal_notes")}),
     )
@@ -404,6 +529,7 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
                 starts_at=obj.starts_at,
                 party_size=obj.party_size,
                 source=obj.source,
+                tables=form.cleaned_data.get("chosen_tables"),
                 details=services.ReservationDetails(
                     children=obj.children or 0,
                     high_chairs=obj.high_chairs or 0,
@@ -421,7 +547,8 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
                 setattr(obj, campo, getattr(reserva, campo))
             self.message_user(
                 request,
-                f"Mesa {reserva.table_codes} asignada, "
+                f"{'Mesas' if ',' in reserva.table_codes else 'Mesa'} "
+                f"{reserva.table_codes} asignada, "
                 f"hasta las {timezone.localtime(reserva.ends_at, services.venue_tz(reserva.venue)):%H:%M}.",
                 messages.INFO,
             )

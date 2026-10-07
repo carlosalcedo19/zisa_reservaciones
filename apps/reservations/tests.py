@@ -505,6 +505,35 @@ class DetallesYMesasTests(BaseSalaTestCase):
             )
         self.assertFalse(Reservation.objects.exists())
 
+    def test_juntar_mesas_elegidas_para_un_grupo_grande(self):
+        # S1+S2 no esta declarada para 9, pero el anfitrion puede juntarlas igual.
+        t4 = Table.objects.create(area=self.area, code="S4", min_seats=1, max_seats=2)
+        reserva = services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=9,
+            source=Reservation.Source.PHONE, tables=[self.t1, self.t2, t4],
+        )
+        self.assertEqual(reserva.table_codes, "S1, S2, S4")
+        self.assertEqual(reserva.occupancies.filter(is_primary=True).get().table, self.t1)
+
+    def test_no_junta_una_mesa_que_no_es_combinable(self):
+        Table.objects.filter(pk=self.t2.pk).update(is_combinable=False)
+        self.t2.refresh_from_db()
+        with self.assertRaisesMessage(services.ReservationError, "S2 no se puede juntar"):
+            services.create_reservation(
+                venue=self.venue, guest=self.guest, starts_at=self.cena(),
+                party_size=6, source=Reservation.Source.PHONE, tables=[self.t1, self.t2],
+            )
+        self.assertFalse(Reservation.objects.exists())
+
+    def test_mesa_elegida_ocupada_avisa_cual(self):
+        services.block_table(self.t2, self.cena(hora=19), self.cena(hora=23),
+                             reason="Evento")
+        with self.assertRaisesMessage(services.NoAvailability, "S2 ya está ocupada"):
+            services.create_reservation(
+                venue=self.venue, guest=self.guest, starts_at=self.cena(),
+                party_size=6, source=Reservation.Source.PHONE, tables=[self.t1, self.t2],
+            )
+
     def test_mover_conserva_la_mesa_si_sigue_libre(self):
         reserva = services.create_reservation(
             venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
@@ -636,6 +665,93 @@ class AdminReservaFormTests(BaseSalaTestCase):
         form = self.formulario(self.cena())
         self.assertFalse(form.is_valid())
         self.assertIn("No queda mesa libre para 2 personas", form.errors[STARTS_AT][0])
+
+    def test_una_mesa_elegida_en_el_alta(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "table": f"t:{self.t2.pk}"}
+        form.is_valid()
+        self.assertNotIn("table", form.errors)
+        self.assertEqual(form.cleaned_data["chosen_tables"], [self.t2])
+
+    def test_sin_juntar_se_ignora_la_lista_de_varias(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "tables": [str(self.t1.pk), str(self.t2.pk)]}
+        form.is_valid()
+        self.assertIsNone(form.cleaned_data["chosen_tables"])
+
+    def test_juntar_mesas_en_el_alta(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "party_size": 7, "combine": "on",
+                     "tables": [str(self.t1.pk), str(self.t2.pk)]}
+        form.is_valid()
+        self.assertNotIn("tables", form.errors)
+        self.assertNotIn(STARTS_AT, form.errors)
+        self.assertEqual(set(form.cleaned_data["chosen_tables"]), {self.t1, self.t2})
+
+    def test_mesas_juntadas_que_no_alcanzan_es_error_del_campo(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "party_size": 10, "combine": "on",
+                     "tables": [str(self.t1.pk), str(self.t2.pk)]}
+        self.assertFalse(form.is_valid())
+        self.assertIn("suman 8 plazas", form.errors["tables"][0])
+
+    def test_mesa_unica_ocupada_es_error_de_su_campo(self):
+        services.block_table(self.t1, self.cena(hora=19), self.cena(hora=23),
+                             reason="Evento")
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "table": f"t:{self.t1.pk}"}
+        self.assertFalse(form.is_valid())
+        self.assertIn("S1 ya está ocupada", form.errors["table"][0])
+
+    def test_la_combinacion_declarada_sale_en_la_lista(self):
+        from apps.reservations.admin import ReservationForm
+
+        html = str(ReservationForm()["table"])
+        self.assertIn('label="Mesas que ya se juntan"', html)
+        self.assertIn(f'value="c:{self.combo.pk}"', html)
+        self.assertIn("S1+S2 · juntas (5-8)", html)
+
+    def test_elegir_la_combinacion_declarada(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "party_size": 6, "table": f"c:{self.combo.pk}"}
+        form.is_valid()
+        self.assertNotIn("table", form.errors)
+        self.assertEqual(set(form.cleaned_data["chosen_tables"]), {self.t1, self.t2})
+
+    def test_combinacion_declarada_respeta_su_aforo(self):
+        form = self.formulario(self.cena())
+        form.data = {**form.data, "party_size": 9, "table": f"c:{self.combo.pk}"}
+        self.assertFalse(form.is_valid())
+        self.assertIn("S1+S2 es para 8 personas como máximo", form.errors["table"][0])
+
+    def test_combinacion_inactiva_no_sale(self):
+        from apps.reservations.admin import ReservationForm
+
+        TableCombination.objects.filter(pk=self.combo.pk).update(is_active=False)
+        self.assertNotIn(f"c:{self.combo.pk}", str(ReservationForm()["table"]))
+
+    def test_las_opciones_de_mesa_llevan_su_zona(self):
+        from apps.reservations.admin import ReservationForm
+
+        html = str(ReservationForm()["table"])
+        self.assertIn(f'data-area="{self.area.pk}"', html)
+        self.assertIn("Que la elija el sistema", html)
+
+    def test_alta_desde_el_admin_junta_las_mesas_marcadas(self):
+        self.staff.is_superuser = True
+        self.staff.save()
+        local = timezone.localtime(self.cena())
+        respuesta = self.client.post(reverse("admin:reservations_reservation_add"), {
+            "venue": self.venue.pk, "guest": self.guest.pk,
+            "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
+            "party_size": 8, "children": 0, "high_chairs": 0,
+            "source": Reservation.Source.STAFF, "combine": "on",
+            "tables": [str(self.t1.pk), str(self.t2.pk)],
+        })
+        self.assertEqual(respuesta.status_code, 302, getattr(respuesta, "context", None)
+                         and respuesta.context.get("errors"))
+        reserva = Reservation.objects.get()
+        self.assertEqual(reserva.table_codes, "S1, S2")
 
     def test_campos_de_solo_lectura_en_alta_y_en_ficha(self):
         from django.contrib import admin

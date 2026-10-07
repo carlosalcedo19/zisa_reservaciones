@@ -7,6 +7,64 @@ aparece "Sentar" en una reserva cancelada ni "Confirmar" en una que ya paso
 por caja. Cada boton lleva a una URL propia registrada en ReservationAdmin.
 {% endcomment %}
 
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    {% if add %}
+        <script>
+        (function () {
+            var zona = document.getElementById("id_area");
+            var juntar = document.getElementById("id_combine");
+            var una = document.getElementById("id_table");
+            var varias = document.getElementById("id_tables");
+            if (!zona || !juntar || !una || !varias) return;
+
+            function fila(campo) {
+                // Primer ancestro comun de la etiqueta y el select: la fila del campo.
+                var nodo = document.querySelector('label[for="' + campo.id + '"]');
+                if (!nodo) return campo;
+                while (nodo.parentElement && !nodo.contains(campo)) nodo = nodo.parentElement;
+                return nodo;
+            }
+
+            function filtrar(select, soloCombinables) {
+                Array.prototype.forEach.call(select.options, function (op) {
+                    if (!op.value) return;
+                    var zonas = (op.dataset.area || "").split(" ");
+                    var oculta = (zona.value && zonas.indexOf(zona.value) < 0)
+                        || (soloCombinables && op.dataset.solo);
+                    op.hidden = !!oculta;
+                    if (oculta) op.selected = false;
+                });
+            }
+
+            function pintar() {
+                filtrar(una, false);
+                filtrar(varias, true);
+                fila(una).style.display = juntar.checked ? "none" : "";
+                fila(varias).style.display = juntar.checked ? "" : "none";
+            }
+
+            zona.addEventListener("change", pintar);
+            juntar.addEventListener("change", function () {
+                // Lo elegido arriba (mesa o combinacion) se arrastra como punto de partida.
+                var elegida = una.options[una.selectedIndex];
+                if (juntar.checked && elegida && elegida.value) {
+                    var ids = elegida.dataset.tables
+                        ? elegida.dataset.tables.split(" ")
+                        : [elegida.value.slice(2)];
+                    ids.forEach(function (id) {
+                        var op = varias.querySelector('option[value="' + id + '"]');
+                        if (op) op.selected = true;
+                    });
+                }
+                pintar();
+            });
+            pintar();
+        })();
+        </script>
+    {% endif %}
+{% endblock %}
+
 {% block form_after %}
     {% if reservation_obj %}
         <div class="zs-actions">

@@ -248,6 +248,50 @@ class ReservationDetails:
     internal_notes: str = ""
 
 
+def validate_tables(venue, starts_at, ends_at, party_size, tables,
+                    exclude_reservation=None, combination=None):
+    """Mesas elegidas a mano: varias se juntan si son una combinacion declarada o todas combinables."""
+    tables = list(tables)
+    if not tables:
+        raise ReservationError("Elige al menos una mesa.")
+
+    ajenas = [t.code for t in tables if t.area.venue_id != venue.pk]
+    if ajenas:
+        raise ReservationError(f"La mesa {', '.join(ajenas)} es de otro restaurante.")
+
+    inactivas = [t.code for t in tables if not t.is_active]
+    if inactivas:
+        raise ReservationError(f"La mesa {', '.join(inactivas)} está fuera de servicio.")
+
+    if combination is not None:
+        if party_size > combination.max_seats:
+            raise ReservationError(
+                f"{combination.name} es para {combination.max_seats} personas como "
+                f"máximo y el grupo es de {party_size}."
+            )
+    elif len(tables) > 1:
+        sueltas = [t.code for t in tables if not t.is_combinable]
+        if sueltas:
+            raise ReservationError(
+                f"La mesa {', '.join(sueltas)} no se puede juntar con otras."
+            )
+
+    capacity = sum(t.max_seats for t in tables)
+    if combination is None and capacity < party_size:
+        raise ReservationError(
+            f"Las mesas elegidas suman {capacity} plazas y el grupo es de "
+            f"{party_size}."
+        )
+
+    busy = busy_table_ids(venue, starts_at, ends_at, exclude_reservation)
+    ocupadas = [t.code for t in tables if t.id in busy]
+    if ocupadas:
+        raise NoAvailability(
+            f"La mesa {', '.join(ocupadas)} ya está ocupada a esa hora."
+        )
+    return tables
+
+
 def _pick_tables(venue, starts_at, ends_at, party_size, tables):
     if tables is None:
         offers = find_availability(venue, starts_at, ends_at, party_size)
@@ -255,14 +299,7 @@ def _pick_tables(venue, starts_at, ends_at, party_size, tables):
             raise NoAvailability(f"No hay mesa para {party_size} personas a esa hora.")
         return list(offers[0].tables)
 
-    tables = list(tables)
-    capacity = sum(t.max_seats for t in tables)
-    if capacity < party_size:
-        raise ReservationError(
-            f"Las mesas elegidas suman {capacity} plazas y el grupo es de "
-            f"{party_size}."
-        )
-    return tables
+    return validate_tables(venue, starts_at, ends_at, party_size, tables)
 
 
 @transaction.atomic
