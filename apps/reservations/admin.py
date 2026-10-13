@@ -316,18 +316,94 @@ class ReservationForm(forms.ModelForm):
         return cleaned
 
 
+class OccupancyForm(forms.ModelForm):
+    """Solo se validan aqui; ReservationAdmin.save_formset aplica cada cambio con su servicio."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        campo = self.fields.get("table")
+        if campo is None:
+            return
+        # La mesa actual sigue en la lista aunque haya salido de servicio.
+        campo.queryset = (Table.objects.filter(is_active=True)
+                          | Table.objects.filter(pk=self.instance.table_id)
+                          ).select_related("area").order_by("area__sort_order", "code")
+        campo.label_from_instance = table_label
+
+    def clean(self):
+        cleaned = super().clean()
+        reserva = self.instance.reservation
+        mesa = cleaned.get("table")
+        if not mesa or cleaned.get("DELETE"):
+            return cleaned
+        try:
+            if self.instance._state.adding:
+                services.validate_extra_table(reserva, mesa)
+            elif mesa.pk != self.instance.table_id:
+                services.validate_extra_table(reserva, mesa, replacing=self.instance.table)
+        except services.ReservationError as exc:
+            raise forms.ValidationError({"table": str(exc)}) from exc
+        return cleaned
+
+
+class OccupancyFormSet(forms.BaseInlineFormSet):
+    def get_queryset(self):
+        # En una reserva viva solo se listan las mesas que ocupa ahora; los cambios
+        # quedan en "movimientos". Cerrada, se ve con que mesas estuvo.
+        qs = super().get_queryset()
+        return qs.filter(is_active=True) if self.instance.is_live else qs
+
+    def clean(self):
+        super().clean()
+        # Django ignora los errores de las filas marcadas para borrar: se validan aqui.
+        if not any(f.instance.pk for f in self.deleted_forms):
+            return
+        quedan = [f for f in self.forms
+                  if f not in self.deleted_forms and getattr(f, "cleaned_data", None)
+                  and f.cleaned_data.get("table")]
+        if not quedan:
+            raise forms.ValidationError(
+                "La reserva se quedaría sin mesa. Cámbiala en vez de quitarla.")
+
+
 class OccupancyInline(TabularInline):
     model = TableOccupancy
+    form = OccupancyForm
+    formset = OccupancyFormSet
     extra = 0
     tab = True
     fields = ("table", "starts_at", "ends_at", "is_primary", "is_active")
-    readonly_fields = ("starts_at", "ends_at", "assigned_at")
-    verbose_name = "mesa asignada"
+    readonly_fields = ("starts_at", "ends_at", "is_primary", "is_active", "assigned_at")
+    # Unfold rotula el boton con verbose_name: "Agregar Mesa adicional."
+    verbose_name = "mesa"
     verbose_name_plural = "mesas asignadas"
 
+    def has_view_permission(self, request, obj=None):
+        # Sin esto, quien no tiene permiso propio sobre ocupaciones ve la pestana vacia.
+        return (request.user.has_perm("reservations.view_reservation")
+                or super().has_view_permission(request, obj))
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        campo = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "table":
+            # Sin los atajos al maestro de mesas: aqui solo se elige.
+            campo.widget.can_add_related = campo.widget.can_change_related = False
+            campo.widget.can_delete_related = campo.widget.can_view_related = False
+        return campo
+
+    def _can_edit_tables(self, request, obj):
+        # Las filas no se guardan tal cual: ReservationAdmin.save_formset las pasa a services.
+        return (obj is not None and obj.is_live
+                and request.user.has_perm("reservations.change_reservation"))
+
     def has_add_permission(self, request, obj=None):
-        # Asignar mesas pasa por services.assign_tables, no por el inline.
-        return False
+        return self._can_edit_tables(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        return self._can_edit_tables(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._can_edit_tables(request, obj)
 
 
 class EventInline(TabularInline):
@@ -569,6 +645,40 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
                 obj.refresh_from_db()
             except services.ReservationError as exc:
                 self.message_user(request, f"No se pudo mover: {exc}", messages.ERROR)
+
+    def save_formset(self, request, form, formset, change):
+        if formset.model is not TableOccupancy:
+            return super().save_formset(request, form, formset, change)
+
+        formset.save(commit=False)
+        reserva = form.instance
+
+        def aplicar(funcion, *args, error):
+            try:
+                return funcion(reserva, *args, user=request.user)
+            except services.ReservationError as exc:
+                self.message_user(request, f"{error}: {exc}", messages.ERROR)
+                return None
+
+        # Nada se borra: la ocupacion se libera y queda en el historial de la reserva.
+        cambiadas = [(o, campos) for o, campos in formset.changed_objects
+                     if aplicar(services.replace_table, o.pk, o.table,
+                                error=f"No se pudo cambiar a la mesa {o.table.code}")]
+        creadas = []
+        for ocupacion in formset.new_objects:
+            if aplicar(services.add_table, ocupacion.table,
+                       error=f"No se pudo agregar la mesa {ocupacion.table.code}"):
+                creadas.append(reserva.occupancies.get(table=ocupacion.table, is_active=True))
+        quitadas = [o for o in formset.deleted_objects
+                    if aplicar(services.remove_table, o.pk,
+                               error=f"No se pudo quitar la mesa {o.table.code}")]
+
+        if cambiadas or creadas or quitadas:
+            self.message_user(request, f"Mesas de la reserva: {reserva.table_codes}.",
+                              messages.INFO)
+        # El historial del admin lee estas listas; las filas del formulario nunca se guardaron.
+        formset.changed_objects, formset.new_objects = cambiadas, creadas
+        formset.deleted_objects = quitadas
 
 
     # URLs propias en vez de actions_detail de Unfold, para pintarlas al pie

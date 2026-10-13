@@ -375,7 +375,7 @@ def create_reservation(
     return reservation
 
 
-def _assign(reservation, tables):
+def _assign(reservation, tables, primary=True):
     # El constraint de Postgres atrapa la carrera entre dos hosts; se traduce a error legible.
     try:
         with transaction.atomic():
@@ -386,7 +386,7 @@ def _assign(reservation, tables):
                         reservation=reservation,
                         starts_at=reservation.starts_at,
                         ends_at=reservation.ends_at,
-                        is_primary=(index == 0),
+                        is_primary=(primary and index == 0),
                         is_active=reservation.is_live,
                     )
                     for index, table in enumerate(tables)
@@ -407,6 +407,87 @@ def assign_tables(reservation, tables, user=None):
     _assign(reservation, list(tables))
     _log_event(reservation, user, reservation.status, reservation.status,
                f"Reasignada a {reservation.table_codes}")
+    return reservation
+
+
+def validate_extra_table(reservation, table, replacing=None):
+    """Una mesa mas (o en lugar de `replacing`) para una reserva viva; no exige que el grupo la necesite."""
+    if not reservation.is_live:
+        raise InvalidTransition("Solo se cambian las mesas de una reserva que sigue viva.")
+
+    actuales = [t for t in reservation.tables if replacing is None or t.pk != replacing.pk]
+    if any(t.pk == table.pk for t in actuales):
+        raise ReservationError(f"La mesa {table.code} ya está en esta reserva.")
+    if table.area.venue_id != reservation.venue_id:
+        raise ReservationError(f"La mesa {table.code} es de otro restaurante.")
+    if not table.is_active:
+        raise ReservationError(f"La mesa {table.code} está fuera de servicio.")
+
+    sueltas = [t.code for t in [*actuales, table] if not t.is_combinable] if actuales else []
+    if sueltas:
+        raise ReservationError(f"La mesa {', '.join(sueltas)} no se puede juntar con otras.")
+
+    busy = busy_table_ids(reservation.venue, reservation.starts_at, reservation.ends_at,
+                          reservation)
+    if table.id in busy:
+        raise NoAvailability(f"La mesa {table.code} ya está ocupada a esa hora.")
+
+
+@transaction.atomic
+def add_table(reservation, table, user=None):
+    reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
+    validate_extra_table(reservation, table)
+    _assign(reservation, [table], primary=not reservation.tables.exists())
+    _log_event(reservation, user, reservation.status, reservation.status,
+               f"Mesa {table.code} agregada; ahora {reservation.table_codes}")
+    return reservation
+
+
+def _active_occupancy(reservation, occupancy_id):
+    try:
+        return reservation.occupancies.select_related("table").get(pk=occupancy_id,
+                                                                   is_active=True)
+    except TableOccupancy.DoesNotExist:
+        raise ReservationError("Esa mesa ya no está asignada a la reserva.") from None
+
+
+@transaction.atomic
+def replace_table(reservation, occupancy_id, table, user=None):
+    reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
+    ocupacion = _active_occupancy(reservation, occupancy_id)
+    anterior = ocupacion.table
+    validate_extra_table(reservation, table, replacing=anterior)
+    ocupacion.is_active = False
+    ocupacion.save(update_fields=["is_active"])
+    _assign(reservation, [table], primary=ocupacion.is_primary)
+    _log_event(reservation, user, reservation.status, reservation.status,
+               f"Mesa {anterior.code} cambiada por {table.code}; "
+               f"ahora {reservation.table_codes}")
+    return reservation
+
+
+def validate_table_removal(reservation, occupancy):
+    if not reservation.is_live:
+        raise InvalidTransition("Solo se cambian las mesas de una reserva que sigue viva.")
+    if not occupancy.is_active:
+        raise ReservationError("Esa mesa ya no está asignada a la reserva.")
+    if not reservation.occupancies.filter(is_active=True).exclude(pk=occupancy.pk).exists():
+        raise ReservationError("La reserva se quedaría sin mesa. Cámbiala en vez de quitarla.")
+
+
+@transaction.atomic
+def remove_table(reservation, occupancy_id, user=None):
+    reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
+    ocupacion = _active_occupancy(reservation, occupancy_id)
+    validate_table_removal(reservation, ocupacion)
+    ocupacion.is_active = False
+    ocupacion.save(update_fields=["is_active"])
+    if ocupacion.is_primary:
+        siguiente = reservation.occupancies.filter(is_active=True).order_by("table__code")[0]
+        siguiente.is_primary = True
+        siguiente.save(update_fields=["is_primary"])
+    _log_event(reservation, user, reservation.status, reservation.status,
+               f"Mesa {ocupacion.table.code} quitada; ahora {reservation.table_codes}")
     return reservation
 
 

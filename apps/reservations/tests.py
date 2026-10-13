@@ -753,6 +753,138 @@ class AdminReservaFormTests(BaseSalaTestCase):
         reserva = Reservation.objects.get()
         self.assertEqual(reserva.table_codes, "S1, S2")
 
+    def reserva_en(self, mesas, party_size=2):
+        return services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(),
+            party_size=party_size, source=Reservation.Source.RECEPCION, tables=mesas,
+        )
+
+    def guardar_mesas(self, reserva, cambios=None, quitar=(), nuevas=()):
+        """cambios: {mesa actual: mesa nueva}; quitar: mesas actuales a borrar de la lista."""
+        cambios = cambios or {}
+        local = timezone.localtime(reserva.starts_at)
+        datos = {
+            "venue": self.venue.pk, "guest": self.guest.pk, "source": reserva.source,
+            "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
+            "party_size": reserva.party_size, "children": 0, "high_chairs": 0,
+            "deposit_status": reserva.deposit_status,
+            "events-TOTAL_FORMS": 0, "events-INITIAL_FORMS": 0,
+        }
+        filas = list(reserva.occupancies.filter(is_active=True).select_related("table"))
+        for i, ocupacion in enumerate(filas):
+            mesa = cambios.get(ocupacion.table, ocupacion.table)
+            datos.update({f"occupancies-{i}-id": ocupacion.pk,
+                          f"occupancies-{i}-reservation": reserva.pk,
+                          f"occupancies-{i}-table": mesa.pk})
+            if ocupacion.table in quitar:
+                datos[f"occupancies-{i}-DELETE"] = "on"
+        for i, mesa in enumerate(nuevas, start=len(filas)):
+            datos.update({f"occupancies-{i}-reservation": reserva.pk,
+                          f"occupancies-{i}-table": mesa.pk})
+        datos.update({"occupancies-TOTAL_FORMS": len(filas) + len(nuevas),
+                      "occupancies-INITIAL_FORMS": len(filas)})
+        return self.client.post(
+            reverse("admin:reservations_reservation_change", args=[reserva.pk]), datos)
+
+    def agregar_mesa(self, reserva, mesa):
+        return self.guardar_mesas(reserva, nuevas=[mesa])
+
+    def assertRedirige(self, respuesta):
+        self.assertEqual(respuesta.status_code, 302, getattr(respuesta, "context", None)
+                         and respuesta.context.get("errors"))
+
+    def test_cambiar_la_mesa_de_una_fila(self):
+        reserva = self.reserva_en([self.t1])
+        self.assertRedirige(self.guardar_mesas(reserva, cambios={self.t1: self.t2}))
+        self.assertEqual(reserva.table_codes, "S2")
+        self.assertTrue(reserva.occupancies.get(table=self.t2, is_active=True).is_primary)
+        self.assertFalse(reserva.occupancies.get(table=self.t1).is_active)
+        self.assertTrue(reserva.events.filter(comment__contains="S1 cambiada por S2").exists())
+        ficha = self.client.get(reverse("admin:reservations_reservation_change",
+                                        args=[reserva.pk]))
+        self.assertContains(ficha, 'name="occupancies-INITIAL_FORMS" value="1"')
+        # Despues de liberar S1 se puede volver a juntar con ella sin choques.
+        self.assertRedirige(self.agregar_mesa(reserva, self.t1))
+        self.assertEqual(reserva.table_codes, "S1, S2")
+
+    def test_no_cambia_a_una_mesa_ocupada_desde_la_fila(self):
+        self.reserva_en([self.t2])
+        reserva = self.reserva_en([self.t1])
+        respuesta = self.guardar_mesas(reserva, cambios={self.t1: self.t2})
+        self.assertContains(respuesta, "S2 ya está ocupada")
+        self.assertEqual(reserva.table_codes, "S1")
+
+    def test_quitar_una_mesa_de_las_juntadas(self):
+        reserva = self.reserva_en([self.t1, self.t2], party_size=6)
+        self.assertRedirige(self.guardar_mesas(reserva, quitar=[self.t1]))
+        self.assertEqual(reserva.table_codes, "S2")
+        self.assertTrue(reserva.occupancies.get(table=self.t2, is_active=True).is_primary)
+        self.assertTrue(reserva.occupancies.filter(table=self.t1).exists())
+
+    def test_no_deja_la_reserva_sin_mesa(self):
+        reserva = self.reserva_en([self.t1])
+        respuesta = self.guardar_mesas(reserva, quitar=[self.t1])
+        self.assertContains(respuesta, "se quedaría sin mesa")
+        self.assertEqual(reserva.table_codes, "S1")
+
+    def test_agregar_una_mesa_cuando_el_grupo_crece(self):
+        reserva = self.reserva_en([self.t1])
+        Reservation.objects.filter(pk=reserva.pk).update(party_size=6)
+        reserva.refresh_from_db()
+        ficha = self.client.get(reverse("admin:reservations_reservation_change",
+                                        args=[reserva.pk]))
+        self.assertContains(ficha, "Agregar Mesa adicional.")
+
+    def test_sin_atajos_al_maestro_de_mesas(self):
+        self.staff.is_superuser = True
+        self.staff.save()
+        reserva = self.reserva_en([self.t1])
+        ficha = self.client.get(reverse("admin:reservations_reservation_change",
+                                        args=[reserva.pk]))
+        self.assertContains(ficha, 'name="occupancies-0-table"')
+        self.assertNotContains(ficha, "/admin/venues/table/add/")
+        self.assertNotContains(ficha, "/admin/venues/table/__fk__/")
+        respuesta = self.agregar_mesa(reserva, self.t2)
+        self.assertEqual(respuesta.status_code, 302, getattr(respuesta, "context", None)
+                         and respuesta.context.get("errors"))
+        self.assertEqual(reserva.table_codes, "S1, S2")
+        nueva = reserva.occupancies.get(table=self.t2)
+        self.assertFalse(nueva.is_primary)
+        self.assertEqual((nueva.starts_at, nueva.ends_at), (reserva.starts_at, reserva.ends_at))
+        self.assertTrue(reserva.events.filter(comment__contains="Mesa S2 agregada").exists())
+
+    def test_no_agrega_una_mesa_ocupada(self):
+        self.reserva_en([self.t2])
+        reserva = self.reserva_en([self.t1])
+        respuesta = self.agregar_mesa(reserva, self.t2)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "S2 ya está ocupada")
+        self.assertEqual(reserva.table_codes, "S1")
+
+    def test_no_agrega_la_misma_mesa_ni_una_que_no_se_junta(self):
+        reserva = self.reserva_en([self.t1])
+        with self.assertRaisesMessage(services.ReservationError, "ya está en esta reserva"):
+            services.validate_extra_table(reserva, self.t1)
+        Table.objects.filter(pk=self.t3.pk).update(is_combinable=False)
+        self.t3.refresh_from_db()
+        with self.assertRaisesMessage(services.ReservationError, "S3 no se puede juntar"):
+            services.validate_extra_table(reserva, self.t3)
+
+    def test_sin_boton_de_agregar_en_una_reserva_cerrada(self):
+        from django.contrib import admin
+        from django.test import RequestFactory
+
+        from apps.reservations.admin import OccupancyInline
+
+        reserva = self.reserva_en([self.t1])
+        inline = OccupancyInline(Reservation, admin.site)
+        request = RequestFactory().get("/")
+        request.user = self.staff
+        self.assertTrue(inline.has_add_permission(request, reserva))
+        services.cancel(reserva)
+        reserva.refresh_from_db()
+        self.assertFalse(inline.has_add_permission(request, reserva))
+
     def test_campos_de_solo_lectura_en_alta_y_en_ficha(self):
         from django.contrib import admin
         from django.urls import reverse
