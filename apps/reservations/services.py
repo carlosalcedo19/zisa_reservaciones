@@ -600,6 +600,61 @@ def mark_no_show(reservation, user=None):
     return reservation
 
 
+STATUS_STAMPS = {
+    Reservation.Status.CONFIRMED: "confirmed_at",
+    Reservation.Status.SEATED: "seated_at",
+    Reservation.Status.FINISHED: "released_at",
+    Reservation.Status.NO_SHOW: "released_at",
+    Reservation.Status.CANCELLED: "cancelled_at",
+}
+
+
+def _reactivate_tables(reservation):
+    # Las de la franja actual; las de franjas anteriores son de antes de moverla.
+    previas = reservation.occupancies.filter(starts_at=reservation.starts_at,
+                                             ends_at=reservation.ends_at)
+    try:
+        with transaction.atomic():
+            if previas.update(is_active=True):
+                return
+    except IntegrityError as exc:
+        if "occupancy_no_overlap" not in str(exc):
+            raise
+    offers = find_availability(reservation.venue, reservation.starts_at,
+                               reservation.ends_at, reservation.party_size, reservation)
+    if not offers:
+        raise NoAvailability("Su mesa ya está ocupada y no queda otra libre a esa hora.")
+    _assign(reservation, list(offers[0].tables))
+
+
+@transaction.atomic
+def force_status(reservation, new_status, user=None, comment=""):
+    """Salta TRANSITIONS: solo para corregir errores, el admin lo limita a superusuarios."""
+    reservation = Reservation.objects.select_for_update().get(pk=reservation.pk)
+    previous = reservation.status
+    if new_status == previous:
+        return reservation
+
+    era_viva = reservation.is_live
+    reservation.status = new_status
+    fields = ["status", "updated_at"]
+    sello = STATUS_STAMPS.get(new_status)
+    if sello:
+        setattr(reservation, sello, timezone.now())
+        fields.append(sello)
+    reservation.save(update_fields=fields)
+
+    if era_viva and not reservation.is_live:
+        reservation.occupancies.update(is_active=False)
+    elif reservation.is_live and not era_viva:
+        _reactivate_tables(reservation)
+
+    _log_event(reservation, user, previous, new_status,
+               comment or "Cambio manual de estado")
+    reservation.guest.refresh_counters()
+    return reservation
+
+
 @transaction.atomic
 def block_table(table, starts_at, ends_at, reason, user=None):
     try:

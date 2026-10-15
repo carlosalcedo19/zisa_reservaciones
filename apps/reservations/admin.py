@@ -569,8 +569,11 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return []
-        # El estado se cambia con las acciones, que registran el movimiento.
-        return ["code", "status", "ends_at", "service_date", "shift", "duration_min"]
+        campos = ["code", "ends_at", "service_date", "shift", "duration_min"]
+        # El estado se cambia con las acciones; el superusuario puede forzarlo para corregir.
+        if not request.user.is_superuser:
+            campos.append("status")
+        return campos
 
     # Partes de la reserva: se borran con ella sin pedir su permiso propio
     # (ReservationEvent no lo tiene a proposito).
@@ -632,8 +635,10 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
 
         anterior = Reservation.objects.get(pk=obj.pk)
         nueva_hora = obj.starts_at
+        nuevo_estado = obj.status
 
-        # El cambio de hora lo aplica services.move, que revalida la mesa.
+        # Hora y estado los aplican services.move y services.force_status.
+        obj.status = anterior.status
         obj.starts_at = anterior.starts_at
         obj.ends_at = anterior.ends_at
         obj.service_date = anterior.service_date
@@ -645,6 +650,14 @@ class ReservationAdmin(ExcelExportMixin, ModelAdmin):
                 obj.refresh_from_db()
             except services.ReservationError as exc:
                 self.message_user(request, f"No se pudo mover: {exc}", messages.ERROR)
+
+        if nuevo_estado != anterior.status and request.user.is_superuser:
+            try:
+                services.force_status(obj, nuevo_estado, user=request.user)
+                obj.refresh_from_db()
+            except services.ReservationError as exc:
+                self.message_user(request, f"No se pudo cambiar el estado: {exc}",
+                                  messages.ERROR)
 
     def save_formset(self, request, form, formset, change):
         if formset.model is not TableOccupancy:

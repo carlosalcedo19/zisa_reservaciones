@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -186,6 +186,32 @@ class EstadoTests(BaseSalaTestCase):
         self.guest.refresh_from_db()
         self.assertEqual(self.guest.no_shows, 1)
         self.assertTrue(self.guest.is_risky is False)  # hace falta un segundo planton
+
+    def test_forzar_estado_salta_las_transiciones_y_recupera_la_mesa(self):
+        reserva = self._reserva()
+        services.mark_no_show(reserva)
+
+        reserva = services.force_status(reserva, Reservation.Status.SEATED)
+        self.assertEqual(reserva.status, Reservation.Status.SEATED)
+        self.assertEqual(reserva.table_codes, "S1")
+        self.assertIsNotNone(reserva.seated_at)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.no_shows, 0)
+
+    def test_forzar_estado_busca_otra_mesa_si_la_suya_se_ocupo(self):
+        reserva = self._reserva()
+        services.cancel(reserva, reason="prueba")
+        services.create_reservation(
+            venue=self.venue, guest=self.guest, starts_at=self.cena(), party_size=2,
+            source=Reservation.Source.PHONE, tables=[self.t1],
+        )
+        reserva = services.force_status(reserva, Reservation.Status.CONFIRMED)
+        self.assertEqual(reserva.table_codes, "S2")
+
+    def test_forzar_estado_a_cerrado_libera_la_mesa(self):
+        reserva = self._reserva()
+        services.force_status(reserva, Reservation.Status.FINISHED)
+        self.assertFalse(reserva.occupancies.filter(is_active=True).exists())
 
 
 class CalendarioTests(BaseSalaTestCase):
@@ -759,12 +785,13 @@ class AdminReservaFormTests(BaseSalaTestCase):
             party_size=party_size, source=Reservation.Source.RECEPCION, tables=mesas,
         )
 
-    def guardar_mesas(self, reserva, cambios=None, quitar=(), nuevas=()):
+    def guardar_mesas(self, reserva, cambios=None, quitar=(), nuevas=(), estado=None):
         """cambios: {mesa actual: mesa nueva}; quitar: mesas actuales a borrar de la lista."""
         cambios = cambios or {}
         local = timezone.localtime(reserva.starts_at)
         datos = {
             "venue": self.venue.pk, "guest": self.guest.pk, "source": reserva.source,
+            "status": estado or reserva.status,
             "starts_at_0": f"{local:%Y-%m-%d}", "starts_at_1": f"{local:%H:%M}",
             "party_size": reserva.party_size, "children": 0, "high_chairs": 0,
             "deposit_status": reserva.deposit_status,
@@ -792,6 +819,24 @@ class AdminReservaFormTests(BaseSalaTestCase):
     def assertRedirige(self, respuesta):
         self.assertEqual(respuesta.status_code, 302, getattr(respuesta, "context", None)
                          and respuesta.context.get("errors"))
+
+    def test_el_superusuario_cambia_el_estado_desde_la_ficha(self):
+        self.staff.is_superuser = True
+        self.staff.save()
+        reserva = self.reserva_en([self.t1])
+        services.cancel(reserva, reason="por error")
+
+        self.assertRedirige(self.guardar_mesas(reserva, estado=Reservation.Status.CONFIRMED))
+        reserva.refresh_from_db()
+        self.assertEqual(reserva.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(reserva.table_codes, "S1")
+        self.assertEqual(reserva.events.first().user, self.staff)
+
+    def test_el_staff_sin_superusuario_no_cambia_el_estado(self):
+        reserva = self.reserva_en([self.t1])
+        self.assertRedirige(self.guardar_mesas(reserva, estado=Reservation.Status.NO_SHOW))
+        reserva.refresh_from_db()
+        self.assertEqual(reserva.status, Reservation.Status.CONFIRMED)
 
     def test_cambiar_la_mesa_de_una_fila(self):
         reserva = self.reserva_en([self.t1])
@@ -872,7 +917,6 @@ class AdminReservaFormTests(BaseSalaTestCase):
 
     def test_sin_boton_de_agregar_en_una_reserva_cerrada(self):
         from django.contrib import admin
-        from django.test import RequestFactory
 
         from apps.reservations.admin import OccupancyInline
 
@@ -895,7 +939,9 @@ class AdminReservaFormTests(BaseSalaTestCase):
         )
         ma = admin.site._registry[Reservation]
         self.assertEqual(ma.get_readonly_fields(None), [])
-        self.assertIn("status", ma.get_readonly_fields(None, reserva))
+        request = RequestFactory().get("/")
+        request.user = self.staff
+        self.assertIn("status", ma.get_readonly_fields(request, reserva))
 
         alta = self.client.get(reverse("admin:reservations_reservation_add"))
         self.assertEqual(alta.status_code, 200)
