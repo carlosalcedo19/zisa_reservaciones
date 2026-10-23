@@ -3091,7 +3091,7 @@ button.zs-tl-label:hover {
 }
 
 .zs-week-day i {
-  background: var(--color-base-300);
+  background: var(--color-base-800);
   border-radius: 5px 5px 2px 2px;
   display: block;
   max-height: 110px;
