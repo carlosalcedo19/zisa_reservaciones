@@ -8,7 +8,105 @@
 {% block branding %}{% include "unfold/helpers/site_branding.html" %}{% endblock %}
 
 {% block content %}
-<div class="zs-dash">
+<!-- Librerías para captura y descarga directa de PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+/* Estilos ajustados para maximizar el uso vertical de la hoja A4 */
+.zs-pdf-cloned-container {
+    background-color: #ffffff !important;
+    width: 850px !important; /* Ancho optimizado para A4 Vertical */
+    padding: 20px !important;
+    color: #111827 !important;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    box-sizing: border-box !important;
+}
+
+/* Ocultar elementos innecesarios */
+.zs-pdf-cloned-container .zs-range,
+.zs-pdf-cloned-container .zs-btn-download,
+.zs-pdf-cloned-container .zs-more,
+.zs-pdf-cloned-container .zs-alert,
+.zs-pdf-cloned-container a[href] {
+    display: none !important;
+}
+
+/* Evitar superposiciones y colapsos de texto */
+.zs-pdf-cloned-container h1,
+.zs-pdf-cloned-container h2,
+.zs-pdf-cloned-container h3,
+.zs-pdf-cloned-container p,
+.zs-pdf-cloned-container span,
+.zs-pdf-cloned-container div {
+    position: static !important;
+    float: none !important;
+    overflow: visible !important;
+}
+
+.zs-pdf-cloned-container .zs-section {
+    margin-top: 14px !important;
+    margin-bottom: 8px !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.zs-pdf-cloned-container .zs-sum-sub {
+    display: block !important;
+    margin-top: 4px !important;
+    margin-bottom: 12px !important;
+}
+
+/* Reducción de relleno en tarjetas para aprovechar el alto */
+.zs-pdf-cloned-container .zs-card,
+.zs-pdf-cloned-container .zs-tile {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    background-color: #ffffff !important;
+    padding: 12px 14px 16px 14px !important;
+    height: auto !important;
+    min-height: fit-content !important;
+    box-sizing: border-box !important;
+}
+
+.zs-pdf-cloned-container .zs-tile-hint,
+.zs-pdf-cloned-container .zs-tile-label {
+    display: block !important;
+    line-height: 1.3 !important;
+    margin-top: 2px !important;
+    font-size: 11px !important;
+}
+
+/* Encabezado visible en el PDF */
+#zs-pdf-header {
+    display: none;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+}
+.zs-pdf-cloned-container #zs-pdf-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+}
+</style>
+
+<div class="zs-dash" id="zs-report-container">
+
+    <!-- Encabezado que se incluye en el PDF -->
+    <div id="zs-pdf-header" class="zs-pdf-block">
+        <div>
+            <h1 style="font-size: 20px; font-weight: 700; margin: 0; color: #111827;">Reporte General de Operaciones y Servicio</h1>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0;">Panel de control del restaurante · {{ site_title }}</p>
+        </div>
+        <div style="text-align: right; font-size: 11px; color: #6b7280;">
+            <p style="margin: 0;"><strong>Fecha de emisión:</strong> <span id="zs-pdf-date"></span></p>
+            <p style="margin: 2px 0 0 0;">Generado por el sistema</p>
+        </div>
+    </div>
 
 {% if not dashboard_ready %}
     <div class="zs-hero">
@@ -35,30 +133,32 @@
         </div>
     {% endif %}
 
-    <h2 class="zs-section">
-        <span class="material-symbols-outlined">today</span> El servicio de hoy
-    </h2>
+    <div class="zs-pdf-block">
+        <h2 class="zs-section">
+            <span class="material-symbols-outlined">today</span> El servicio de hoy
+        </h2>
 
-    <div class="zs-tiles zs-tiles--6">
-        {% for kpi in now_kpis %}
-            <div class="zs-tile" data-tone="{{ kpi.tone|default:'' }}">
-                <span class="material-symbols-outlined zs-tile-icon">{{ kpi.icon }}</span>
-                <span class="zs-tile-value">{{ kpi.value }}</span>
-                <span class="zs-tile-label">{{ kpi.label }}</span>
-                <span class="zs-tile-hint">{{ kpi.hint }}</span>
-            </div>
-        {% endfor %}
-        {% for kpi in day_kpis %}
-            <div class="zs-tile" data-tone="{{ kpi.tone|default:'' }}">
-                <span class="material-symbols-outlined zs-tile-icon">{{ kpi.icon }}</span>
-                <span class="zs-tile-value">{{ kpi.value }}</span>
-                <span class="zs-tile-label">{{ kpi.label }}</span>
-                <span class="zs-tile-hint">{{ kpi.hint }}</span>
-            </div>
-        {% endfor %}
+        <div class="zs-tiles zs-tiles--6">
+            {% for kpi in now_kpis %}
+                <div class="zs-tile" data-tone="{{ kpi.tone|default:'' }}">
+                    <span class="material-symbols-outlined zs-tile-icon">{{ kpi.icon }}</span>
+                    <span class="zs-tile-value">{{ kpi.value }}</span>
+                    <span class="zs-tile-label">{{ kpi.label }}</span>
+                    <span class="zs-tile-hint">{{ kpi.hint }}</span>
+                </div>
+            {% endfor %}
+            {% for kpi in day_kpis %}
+                <div class="zs-tile" data-tone="{{ kpi.tone|default:'' }}">
+                    <span class="material-symbols-outlined zs-tile-icon">{{ kpi.icon }}</span>
+                    <span class="zs-tile-value">{{ kpi.value }}</span>
+                    <span class="zs-tile-label">{{ kpi.label }}</span>
+                    <span class="zs-tile-hint">{{ kpi.hint }}</span>
+                </div>
+            {% endfor %}
+        </div>
     </div>
 
-    <div class="zs-grid">
+    <div class="zs-grid zs-pdf-block">
         <div class="zs-card">
             <div class="zs-card-head">
                 <h3><span class="material-symbols-outlined">login</span> Próximas llegadas</h3>
@@ -66,7 +166,6 @@
             </div>
             <div class="zs-card-body zs-card-body--flush">
                 {% for r in upcoming %}
-                    {# La fila entera abre la ficha (::after); el boton del siguiente paso queda por encima. #}
                     <div class="zs-row{% if r.is_overdue %} zs-row--late{% endif %}">
                         <span class="zs-row-time">{{ r.local_time|time:"H:i" }}</span>
                         <span class="zs-row-who">
@@ -127,274 +226,241 @@
         </div>
     </div>
 
-    <div class="zs-grid">
-        <div class="zs-card">
-            <div class="zs-card-head">
-                <h3><span class="material-symbols-outlined">show_chart</span> Gente en sala, franja a franja</h3>
-                <span>pico de {{ hourly_peak }} cubiertos</span>
-            </div>
-            {% if hourly_peak %}
-                <div class="zs-chart"><canvas id="zs-chart-hoy"></canvas></div>
-            {% else %}
-                <div class="zs-card-body">
-                    <p class="zs-empty">
-                        <span class="material-symbols-outlined">event_busy</span>
-                        {% if hourly_values %}Todavía no hay nadie en sala hoy.{% else %}Hoy el local no abre, así que no hay curva que dibujar.{% endif %}
-                    </p>
-                </div>
-            {% endif %}
-        </div>
-
-        <div class="zs-card">
-            <div class="zs-card-head">
-                <h3><span class="material-symbols-outlined">schedule</span> Turnos</h3>
-            </div>
-            <div class="zs-card-body zs-card-body--flush">
-                {% for s in shifts %}
-                    <div class="zs-shift">
-                        <div class="zs-shift-top">
-                            <b>{{ s.name }}</b>
-                            <span>{{ s.hours }}</span>
-                        </div>
-                        <div class="zs-bar">{% if s.pct %}<i style="width:{{ s.pct }}%"></i>{% endif %}</div>
-                        <div class="zs-shift-top">
-                            <span>{{ s.reservations }} reserva{{ s.reservations|pluralize:"s" }} · {{ s.covers }} cubiertos</span>
-                            <span>hasta las {{ s.last_seating|time:"H:i" }}</span>
-                        </div>
-                    </div>
-                {% empty %}
-                    <p class="zs-empty">
-                        <span class="material-symbols-outlined">event_busy</span>
-                        Hoy no hay turnos abiertos.
-                    </p>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
     {# Cifras del negocio: solo el superusuario. #}
     {% if is_boss %}
-    <div class="zs-sum-bar">
-        <h2 class="zs-section">
-            <span class="material-symbols-outlined">insights</span> Resumen
-        </h2>
-        {# El selector lleva a un rango ya armado; las fechas sueltas envian el formulario cuando estan las dos. #}
-        <form class="zs-range" method="get" action="" x-data
-              x-on:change="if ($event.target.type === 'date') { const f = $el; if (f.desde.value && f.hasta.value) f.submit(); else try { (f.desde.value ? f.hasta : f.desde).showPicker(); } catch (e) {} }">
-            <div class="zs-seg">
-                <label class="zs-seg-field">
-                    <span class="material-symbols-outlined" aria-hidden="true">date_range</span>
-                    <span class="zs-sr">Período</span>
-                    <select x-on:change.stop="if ($event.target.value === 'custom') { try { $el.form.desde.showPicker(); } catch (e) {} } else { window.location.search = $event.target.value; }">
-                        <option value=""{% if not range_summary %} selected{% endif %}>Semana y mes</option>
-                        {% for p in range_presets %}
-                            <option value="?{{ p.qs }}"{% if p.selected %} selected{% endif %}>{{ p.label }}</option>
-                        {% endfor %}
-                        <option value="custom"{% if range_custom %} selected{% endif %}>Elegir fechas…</option>
-                    </select>
-                </label>
-                <label class="zs-seg-field">
-                    <span class="zs-range-k">Desde</span>
-                    <span>{% if range_summary %}{{ range_summary.start|date:"j M Y" }}{% else %}—{% endif %}</span>
-                    <input type="date" name="desde" value="{{ range_summary.start|date:'Y-m-d' }}" aria-label="Desde"
-                           onclick="try { this.showPicker(); } catch (e) {}">
-                </label>
-                <label class="zs-seg-field">
-                    <span class="zs-range-k">Hasta</span>
-                    <span>{% if range_summary %}{{ range_summary.end|date:"j M Y" }}{% else %}—{% endif %}</span>
-                    <input type="date" name="hasta" value="{{ range_summary.end|date:'Y-m-d' }}" aria-label="Hasta"
-                           onclick="try { this.showPicker(); } catch (e) {}">
-                </label>
-                {% if range_summary %}
-                    <a href="?" title="Volver a semana y mes" aria-label="Volver a semana y mes">
-                        <span class="material-symbols-outlined">close</span>
+    <!-- Bloque agrupado de Resumen -->
+    <div class="zs-pdf-block">
+        <div class="zs-sum-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <h2 class="zs-section" style="margin: 0;">
+                <span class="material-symbols-outlined">insights</span> Resumen
+            </h2>
+            
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <!-- BOTÓN PARA DESCARGAR REPORTE -->
+                <button type="button" id="btn-download-pdf" class="zs-btn zs-btn-download" onclick="descargarPDFDirecto()" style="display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+                    <span class="material-symbols-outlined">download</span> Descargar reporte
+                </button>
+
+                <form class="zs-range" method="get" action="" x-data
+                      x-on:change="if ($event.target.type === 'date') { const f = $el; if (f.desde.value && f.hasta.value) f.submit(); else try { (f.desde.value ? f.hasta : f.desde).showPicker(); } catch (e) {} }">
+                    <div class="zs-seg">
+                        <label class="zs-seg-field">
+                            <span class="material-symbols-outlined" aria-hidden="true">date_range</span>
+                            <span class="zs-sr">Período</span>
+                            <select x-on:change.stop="if ($event.target.value === 'custom') { try { $el.form.desde.showPicker(); } catch (e) {} } else { window.location.search = $event.target.value; }">
+                                <option value=""{% if not range_summary %} selected{% endif %}>Semana y mes</option>
+                                {% for p in range_presets %}
+                                    <option value="?{{ p.qs }}"{% if p.selected %} selected{% endif %}>{{ p.label }}</option>
+                                {% endfor %}
+                                <option value="custom"{% if range_custom %} selected{% endif %}>Elegir fechas…</option>
+                            </select>
+                        </label>
+                        <label class="zs-seg-field">
+                            <span class="zs-range-k">Desde</span>
+                            <span>{% if range_summary %}{{ range_summary.start|date:"j M Y" }}{% else %}—{% endif %}</span>
+                            <input type="date" name="desde" value="{{ range_summary.start|date:'Y-m-d' }}" aria-label="Desde"
+                                   onclick="try { this.showPicker(); } catch (e) {}">
+                        </label>
+                        <label class="zs-seg-field">
+                            <span class="zs-range-k">Hasta</span>
+                            <span>{% if range_summary %}{{ range_summary.end|date:"j M Y" }}{% else %}—{% endif %}</span>
+                            <input type="date" name="hasta" value="{{ range_summary.end|date:'Y-m-d' }}" aria-label="Hasta"
+                                   onclick="try { this.showPicker(); } catch (e) {}">
+                        </label>
+                        {% if range_summary %}
+                            <a href="?" title="Volver a semana y mes" aria-label="Volver a semana y mes">
+                                <span class="material-symbols-outlined">close</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                    <noscript><button type="submit" class="zs-btn">Ver</button></noscript>
+                </form>
+            </div>
+        </div>
+        <p class="zs-sum-sub">
+            {% if range_summary %}
+                {{ range_summary.start|date:"j M Y" }} – {{ range_summary.end|date:"j M Y" }}
+                · comparado con {{ range_summary.prev_start|date:"j M" }} – {{ range_summary.prev_end|date:"j M Y" }}
+            {% else %}
+                Esta semana y este mes, junto a lo que viene mañana
+            {% endif %}
+        </p>
+
+        <div class="zs-sum">
+            {% with t=summary.tomorrow %}
+            <div class="zs-card zs-sum-card">
+                <div class="zs-card-head">
+                    <h3>Mañana</h3>
+                    <span>{{ t.date|date:"l j"|capfirst }}</span>
+                </div>
+                <div class="zs-sum-figs">
+                    <div><b>{{ t.reservations }}</b><span>reserva{{ t.reservations|pluralize:"s" }}</span></div>
+                    <div><b>{{ t.people }}</b><span>personas</span></div>
+                    <div{% if t.pending %} class="is-warn"{% endif %}><b>{{ t.pending }}</b><span>por confirmar</span></div>
+                </div>
+                <div class="zs-sum-list">
+                    {% for r in t.rows %}
+                        <a class="zs-sum-row" href="{% url 'admin:reservations_reservation_change' r.pk %}">
+                            <span class="zs-sum-time">{{ r.local_time|time:"H:i" }}</span>
+                            <span class="zs-sum-who"><b>{{ r.guest.name }}</b><small>{{ r.party_size }} pers. · {{ r.table_codes }}</small></span>
+                            <span class="zs-chip" data-tone="{{ r.tone }}">{{ r.get_status_display }}</span>
+                        </a>
+                    {% empty %}
+                        <p class="zs-sum-empty">Todavía no hay reservas para mañana.</p>
+                    {% endfor %}
+                </div>
+                {% if t.reservations %}
+                    <a class="zs-more" href="{{ t.url }}">
+                        {% if t.more %}Ver las {{ t.reservations }} de mañana{% else %}Ver en la lista{% endif %}
                     </a>
                 {% endif %}
             </div>
-            <noscript><button type="submit" class="zs-btn">Ver</button></noscript>
-        </form>
-    </div>
-    <p class="zs-sum-sub">
-        {% if range_summary %}
-            {{ range_summary.start|date:"j M Y" }} – {{ range_summary.end|date:"j M Y" }}
-            · comparado con {{ range_summary.prev_start|date:"j M" }} – {{ range_summary.prev_end|date:"j M Y" }}
-        {% else %}
-            Esta semana y este mes, junto a lo que viene mañana
-        {% endif %}
-    </p>
+            {% endwith %}
 
-    <div class="zs-sum">
-        {% with t=summary.tomorrow %}
-        <div class="zs-card zs-sum-card">
-            <div class="zs-card-head">
-                <h3>Mañana</h3>
-                <span>{{ t.date|date:"l j"|capfirst }}</span>
+            {% if range_summary %}
+            {% with r=range_summary %}
+            <div class="zs-card zs-sum-card zs-sum-card--wide">
+                <div class="zs-card-head">
+                    <h3>Del {{ r.start|date:"j M Y" }} al {{ r.end|date:"j M Y" }}</h3>
+                    <span>{{ r.days }} día{{ r.days|pluralize:"s" }}</span>
+                </div>
+                <div class="zs-sum-figs">
+                    <div><b>{{ r.reservations }}</b><span>reserva{{ r.reservations|pluralize:"s" }}</span></div>
+                    <div><b>{{ r.people }}</b><span>personas</span></div>
+                    <div>
+                        {% if r.change is not None %}
+                            <b class="zs-delta" data-sign="{% if r.change > 0 %}up{% elif r.change < 0 %}down{% else %}{% endif %}">{% if r.change > 0 %}+{% endif %}{{ r.change }}%</b>
+                        {% else %}<b>—</b>{% endif %}
+                        <span title="{{ r.prev_start|date:'j M' }} – {{ r.prev_end|date:'j M Y' }}">vs. los {{ r.days }} día{{ r.days|pluralize:"s" }} anteriores</span>
+                    </div>
+                </div>
+                <div class="zs-sum-split">
+                    {% if r.bars %}
+                        <figure class="zs-week zs-week--range" aria-label="Personas por día del período"
+                                style="margin:0;" data-cols="{{ r.days }}">
+                            {% for d in r.bars %}
+                                <div class="zs-week-day{% if d.is_today %} is-today{% elif d.is_future %} is-future{% endif %}"
+                                     title="{{ d.letter }} {{ d.number }} · {{ d.people }} personas{% if d.is_future %} reservadas{% endif %}">
+                                    <em>{% if d.people %}{{ d.people }}{% endif %}</em>
+                                    <i style="height: var(--h);" data-pct="{{ d.pct }}%"></i>
+                                    <span>{{ d.number }}</span>
+                                </div>
+                            {% endfor %}
+                        </figure>
+                    {% endif %}
+                    <dl class="zs-sum-stats">
+                        <div><dt>No-shows</dt><dd{% if r.no_show_rate >= 10 %} class="is-bad"{% endif %}>{{ r.no_shows }} <small>({{ r.no_show_rate }}%)</small></dd></div>
+                        <div><dt>Cancelaciones</dt><dd>{{ r.cancelled }}</dd></div>
+                        <div><dt>Personas por reserva</dt><dd>{% if r.avg_party %}{{ r.avg_party }}{% else %}—{% endif %}</dd></div>
+                        <div><dt>Día más fuerte</dt><dd>{% if r.best_day %}{{ r.best_day|date:"l j M"|capfirst }} <small>· {{ r.best_people }} pers.</small>{% else %}—{% endif %}</dd></div>
+                    </dl>
+                </div>
+                <a class="zs-more" href="{{ r.url }}">Ver las reservas del período</a>
             </div>
-            <div class="zs-sum-figs">
-                <div><b>{{ t.reservations }}</b><span>reserva{{ t.reservations|pluralize:"s" }}</span></div>
-                <div><b>{{ t.people }}</b><span>personas</span></div>
-                <div{% if t.pending %} class="is-warn"{% endif %}><b>{{ t.pending }}</b><span>por confirmar</span></div>
+            {% endwith %}
+            {% else %}
+            {% with w=summary.week %}
+            <div class="zs-card zs-sum-card">
+                <div class="zs-card-head">
+                    <h3>Esta semana</h3>
+                    <span>{{ w.range }}</span>
+                </div>
+                <div class="zs-sum-figs">
+                    <div><b>{{ w.reservations }}</b><span>reservas</span></div>
+                    <div><b>{{ w.people }}</b><span>personas</span></div>
+                    <div>
+                        {% if w.change is not None %}
+                            <b class="zs-delta" data-sign="{% if w.change > 0 %}up{% elif w.change < 0 %}down{% else %}flat{% endif %}">{% if w.change > 0 %}+{% endif %}{{ w.change }}%</b>
+                        {% else %}<b>—</b>{% endif %}
+                        <span>vs. semana pasada</span>
+                    </div>
+                </div>
+                <figure class="zs-week" aria-label="Personas por día de esta semana" style="margin:0">
+                    {% for d in w.days %}
+                        <div class="zs-week-day{% if d.is_today %} is-today{% elif d.is_future %} is-future{% endif %}"
+                             title="{{ d.letter }} {{ d.number }} · {{ d.people }} personas{% if d.is_future %} reservadas{% endif %}">
+                            <em>{% if d.people %}{{ d.people }}{% endif %}</em>
+                            <i style="height: var(--h);" data-pct="{{ d.pct }}%"></i>
+                            <span>{{ d.letter }}</span>
+                        </div>
+                    {% endfor %}
+                </figure>
+                <p class="zs-sum-foot">
+                    {{ w.no_shows }} no-show{{ w.no_shows|pluralize:"s" }} · {{ w.cancelled }} cancelada{{ w.cancelled|pluralize:"s" }}
+                    · los días que faltan cuentan lo ya reservado
+                </p>
             </div>
-            <div class="zs-sum-list">
-                {% for r in t.rows %}
-                    <a class="zs-sum-row" href="{% url 'admin:reservations_reservation_change' r.pk %}">
-                        <span class="zs-sum-time">{{ r.local_time|time:"H:i" }}</span>
-                        <span class="zs-sum-who"><b>{{ r.guest.name }}</b><small>{{ r.party_size }} pers. · {{ r.table_codes }}</small></span>
-                        <span class="zs-chip" data-tone="{{ r.tone }}">{{ r.get_status_display }}</span>
-                    </a>
-                {% empty %}
-                    <p class="zs-sum-empty">Todavía no hay reservas para mañana.</p>
-                {% endfor %}
+            {% endwith %}
+
+            {% with m=summary.month %}
+            <div class="zs-card zs-sum-card">
+                <div class="zs-card-head">
+                    <h3>Este mes</h3>
+                    <span>{{ m.name|capfirst }}</span>
+                </div>
+                <div class="zs-sum-figs">
+                    <div><b>{{ m.reservations }}</b><span>reservas</span></div>
+                    <div><b>{{ m.people }}</b><span>personas</span></div>
+                    <div>
+                        {% if m.change is not None %}
+                            <b class="zs-delta" data-sign="{% if m.change > 0 %}up{% elif m.change < 0 %}down{% else %}flat{% endif %}">{% if m.change > 0 %}+{% endif %}{{ m.change }}%</b>
+                        {% else %}<b>—</b>{% endif %}
+                        <span>vs. mes pasado</span>
+                    </div>
+                </div>
+                <dl class="zs-sum-stats">
+                    <div><dt>No-shows</dt><dd{% if m.no_show_rate >= 10 %} class="is-bad"{% endif %}>{{ m.no_shows }} <small>({{ m.no_show_rate }}%)</small></dd></div>
+                    <div><dt>Cancelaciones</dt><dd>{{ m.cancelled }}</dd></div>
+                    <div><dt>Personas por reserva</dt><dd>{% if m.avg_party %}{{ m.avg_party }}{% else %}—{% endif %}</dd></div>
+                    <div><dt>Día más fuerte</dt><dd>{% if m.best_day %}{{ m.best_day|date:"l j"|capfirst }} <small>· {{ m.best_people }} pers.</small>{% else %}—{% endif %}</dd></div>
+                </dl>
+                <a class="zs-more" href="{{ m.url }}">Ver las reservas del mes</a>
             </div>
-            {% if t.reservations %}
-                <a class="zs-more" href="{{ t.url }}">
-                    {% if t.more %}Ver las {{ t.reservations }} de mañana{% else %}Ver en la lista{% endif %}
-                </a>
+            {% endwith %}
             {% endif %}
         </div>
-        {% endwith %}
-
-        {% if range_summary %}
-        {% with r=range_summary %}
-        <div class="zs-card zs-sum-card zs-sum-card--wide">
-            <div class="zs-card-head">
-                <h3>Del {{ r.start|date:"j M Y" }} al {{ r.end|date:"j M Y" }}</h3>
-                <span>{{ r.days }} día{{ r.days|pluralize:"s" }}</span>
-            </div>
-            <div class="zs-sum-figs">
-                <div><b>{{ r.reservations }}</b><span>reserva{{ r.reservations|pluralize:"s" }}</span></div>
-                <div><b>{{ r.people }}</b><span>personas</span></div>
-                <div>
-                    {% if r.change is not None %}
-                        <b class="zs-delta" data-sign="{% if r.change > 0 %}up{% elif r.change < 0 %}down{% else %}flat{% endif %}">{% if r.change > 0 %}+{% endif %}{{ r.change }}%</b>
-                    {% else %}<b>—</b>{% endif %}
-                    <span title="{{ r.prev_start|date:'j M' }} – {{ r.prev_end|date:'j M Y' }}">vs. los {{ r.days }} día{{ r.days|pluralize:"s" }} anteriores</span>
-                </div>
-            </div>
-            <div class="zs-sum-split">
-                {% if r.bars %}
-                    <figure class="zs-week zs-week--range" aria-label="Personas por día del período"
-                            style="margin:0;grid-template-columns:repeat({{ r.days }}, minmax(0, 1fr))">
-                        {% for d in r.bars %}
-                            <div class="zs-week-day{% if d.is_today %} is-today{% elif d.is_future %} is-future{% endif %}"
-                                 title="{{ d.letter }} {{ d.number }} · {{ d.people }} personas{% if d.is_future %} reservadas{% endif %}">
-                                <em>{% if d.people %}{{ d.people }}{% endif %}</em>
-                                <i style="height:{{ d.pct }}%"></i>
-                                <span>{{ d.number }}</span>
-                            </div>
-                        {% endfor %}
-                    </figure>
-                {% endif %}
-                <dl class="zs-sum-stats">
-                    <div><dt>No-shows</dt><dd{% if r.no_show_rate >= 10 %} class="is-bad"{% endif %}>{{ r.no_shows }} <small>({{ r.no_show_rate }}%)</small></dd></div>
-                    <div><dt>Cancelaciones</dt><dd>{{ r.cancelled }}</dd></div>
-                    <div><dt>Personas por reserva</dt><dd>{% if r.avg_party %}{{ r.avg_party }}{% else %}—{% endif %}</dd></div>
-                    <div><dt>Día más fuerte</dt><dd>{% if r.best_day %}{{ r.best_day|date:"l j M"|capfirst }} <small>· {{ r.best_people }} pers.</small>{% else %}—{% endif %}</dd></div>
-                </dl>
-            </div>
-            <a class="zs-more" href="{{ r.url }}">Ver las reservas del período</a>
-        </div>
-        {% endwith %}
-        {% else %}
-        {% with w=summary.week %}
-        <div class="zs-card zs-sum-card">
-            <div class="zs-card-head">
-                <h3>Esta semana</h3>
-                <span>{{ w.range }}</span>
-            </div>
-            <div class="zs-sum-figs">
-                <div><b>{{ w.reservations }}</b><span>reservas</span></div>
-                <div><b>{{ w.people }}</b><span>personas</span></div>
-                <div>
-                    {% if w.change is not None %}
-                        <b class="zs-delta" data-sign="{% if w.change > 0 %}up{% elif w.change < 0 %}down{% else %}flat{% endif %}">{% if w.change > 0 %}+{% endif %}{{ w.change }}%</b>
-                    {% else %}<b>—</b>{% endif %}
-                    <span>vs. semana pasada</span>
-                </div>
-            </div>
-            <figure class="zs-week" aria-label="Personas por día de esta semana" style="margin:0">
-                {% for d in w.days %}
-                    <div class="zs-week-day{% if d.is_today %} is-today{% elif d.is_future %} is-future{% endif %}"
-                         title="{{ d.letter }} {{ d.number }} · {{ d.people }} personas{% if d.is_future %} reservadas{% endif %}">
-                        <em>{% if d.people %}{{ d.people }}{% endif %}</em>
-                        <i style="height:{{ d.pct }}%"></i>
-                        <span>{{ d.letter }}</span>
-                    </div>
-                {% endfor %}
-            </figure>
-            <p class="zs-sum-foot">
-                {{ w.no_shows }} no-show{{ w.no_shows|pluralize:"s" }} · {{ w.cancelled }} cancelada{{ w.cancelled|pluralize:"s" }}
-                · los días que faltan cuentan lo ya reservado
-            </p>
-        </div>
-        {% endwith %}
-
-        {% with m=summary.month %}
-        <div class="zs-card zs-sum-card">
-            <div class="zs-card-head">
-                <h3>Este mes</h3>
-                <span>{{ m.name|capfirst }}</span>
-            </div>
-            <div class="zs-sum-figs">
-                <div><b>{{ m.reservations }}</b><span>reservas</span></div>
-                <div><b>{{ m.people }}</b><span>personas</span></div>
-                <div>
-                    {% if m.change is not None %}
-                        <b class="zs-delta" data-sign="{% if m.change > 0 %}up{% elif m.change < 0 %}down{% else %}flat{% endif %}">{% if m.change > 0 %}+{% endif %}{{ m.change }}%</b>
-                    {% else %}<b>—</b>{% endif %}
-                    <span>vs. mes pasado</span>
-                </div>
-            </div>
-            <dl class="zs-sum-stats">
-                <div><dt>No-shows</dt><dd{% if m.no_show_rate >= 10 %} class="is-bad"{% endif %}>{{ m.no_shows }} <small>({{ m.no_show_rate }}%)</small></dd></div>
-                <div><dt>Cancelaciones</dt><dd>{{ m.cancelled }}</dd></div>
-                <div><dt>Personas por reserva</dt><dd>{% if m.avg_party %}{{ m.avg_party }}{% else %}—{% endif %}</dd></div>
-                <div><dt>Día más fuerte</dt><dd>{% if m.best_day %}{{ m.best_day|date:"l j"|capfirst }} <small>· {{ m.best_people }} pers.</small>{% else %}—{% endif %}</dd></div>
-            </dl>
-            <a class="zs-more" href="{{ m.url }}">Ver las reservas del mes</a>
-        </div>
-        {% endwith %}
-        {% endif %}
     </div>
     {% endif %}
 
-    <h2 class="zs-section">
-        <span class="material-symbols-outlined">trending_up</span> Tendencias
-    </h2>
+    <div class="zs-pdf-block">
+        <h2 class="zs-section">
+            <span class="material-symbols-outlined">trending_up</span> Tendencias
+        </h2>
 
-    <div class="zs-grid">
-        <div class="zs-card">
-            <div class="zs-card-head">
-                <h3><span class="material-symbols-outlined">bar_chart</span> Cubiertos por día</h3>
-                <span>últimos 7 días de servicio</span>
-            </div>
-            {% if history_total %}
-                <div class="zs-chart"><canvas id="zs-chart-semana"></canvas></div>
-            {% else %}
-                <div class="zs-card-body">
-                    <p class="zs-empty">
-                        <span class="material-symbols-outlined">bar_chart</span>
-                        Sin cubiertos en los últimos 7 días.
-                    </p>
+        <div class="zs-grid">
+            <div class="zs-card">
+                <div class="zs-card-head">
+                    <h3><span class="material-symbols-outlined">bar_chart</span> Cubiertos por día</h3>
+                    <span>últimos 7 días de servicio</span>
                 </div>
-            {% endif %}
-        </div>
+                {% if history_total %}
+                    <div class="zs-chart"><canvas id="zs-chart-semana"></canvas></div>
+                {% else %}
+                    <div class="zs-card-body">
+                        <p class="zs-empty">
+                            <span class="material-symbols-outlined">bar_chart</span>
+                            Sin cubiertos en los últimos 7 días.
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
 
-        <div class="zs-card">
-            <div class="zs-card-head">
-                <h3><span class="material-symbols-outlined">pie_chart</span> De dónde llegan</h3>
-                <span>últimos 30 días</span>
-            </div>
-            {% if source_values %}
-                <div class="zs-chart"><canvas id="zs-chart-origen"></canvas></div>
-            {% else %}
-                <div class="zs-card-body">
-                    <p class="zs-empty">
-                        <span class="material-symbols-outlined">inbox</span>
-                        Todavía no hay reservas que repartir.
-                    </p>
+            <div class="zs-card">
+                <div class="zs-card-head">
+                    <h3><span class="material-symbols-outlined">pie_chart</span> De dónde llegan</h3>
+                    <span>últimos 30 días</span>
                 </div>
-            {% endif %}
+                {% if source_values %}
+                    <div class="zs-chart"><canvas id="zs-chart-origen"></canvas></div>
+                {% else %}
+                    <div class="zs-card-body">
+                        <p class="zs-empty">
+                            <span class="material-symbols-outlined">inbox</span>
+                            Todavía no hay reservas que repartir.
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
@@ -406,8 +472,131 @@
     {{ source_values|json_script:"zs-source-values" }}
 
     <script>
+    async function descargarPDFDirecto() {
+        const btn = document.getElementById('btn-download-pdf');
+        const originalContainer = document.getElementById('zs-report-container');
+        
+        const ahora = new Date();
+        document.getElementById('zs-pdf-date').innerText = ahora.toLocaleDateString('es-ES', {
+            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Generando PDF...';
+        btn.style.pointerEvents = 'none';
+
+        // 1. CLONAR CONTENEDOR
+        const clon = originalContainer.cloneNode(true);
+        clon.classList.add('zs-pdf-cloned-container');
+        
+        clon.style.position = 'absolute';
+        clon.style.left = '0';
+        clon.style.top = '0';
+        clon.style.zIndex = '-99999';
+        clon.style.visibility = 'visible';
+        
+        document.body.appendChild(clon);
+
+        // 2. COPIAR CANVAS DE CHART.JS
+        const originalCanvases = originalContainer.querySelectorAll('canvas');
+        const clonedCanvases = clon.querySelectorAll('canvas');
+        originalCanvases.forEach((c, idx) => {
+            if (clonedCanvases[idx]) {
+                const destCanvas = clonedCanvases[idx];
+                const destCtx = destCanvas.getContext('2d');
+                destCanvas.width = c.width;
+                destCanvas.height = c.height;
+                destCanvas.style.width = c.style.width;
+                destCanvas.style.height = c.style.height;
+                destCtx.drawImage(c, 0, 0);
+            }
+        });
+
+        // 3. SANITIZAR FORMATOS DE COLOR OKLCH
+        function sanitizeElement(el) {
+            const comp = window.getComputedStyle(el);
+            ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'fill', 'stroke'].forEach(prop => {
+                const val = comp[prop];
+                if (val && val.includes('oklch')) {
+                    if (prop === 'backgroundColor') el.style[prop] = '#ffffff';
+                    else if (prop === 'borderColor') el.style[prop] = '#e5e7eb';
+                    else el.style[prop] = '#111827';
+                }
+            });
+        }
+        clon.querySelectorAll('*').forEach(sanitizeElement);
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+            const { jsPDF } = window.jspdf;
+            // PDF Vertical ('portrait') para optimizar espacio
+            const pdf = new jsPDF('portrait', 'mm', 'a4'); 
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();   // 210 mm
+            const pdfHeight = pdf.internal.pageSize.getHeight(); // 297 mm
+            const margin = 10;
+            const contentWidth = pdfWidth - (margin * 2); // 190 mm
+            
+            let currentY = margin;
+            const bloques = clon.querySelectorAll('.zs-pdf-block');
+
+            // Procesamiento individual por bloques
+            for (let i = 0; i < bloques.length; i++) {
+                const bloque = bloques[i];
+
+                const canvas = await html2canvas(bloque, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    windowWidth: 950,
+                    onclone: (docCloned) => {
+                        const styleTags = docCloned.querySelectorAll('style');
+                        styleTags.forEach(st => {
+                            if (st.innerHTML && st.innerHTML.includes('oklch')) {
+                                st.innerHTML = st.innerHTML.replace(/oklch\([^)]+\)/gi, '#6b7280');
+                            }
+                        });
+                    }
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.98);
+                const blockHeight = (canvas.height * contentWidth) / canvas.width;
+
+                // Verificación de salto de página
+                if (currentY + blockHeight > pdfHeight - margin) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+
+                pdf.addImage(imgData, 'JPEG', margin, currentY, contentWidth, blockHeight);
+                currentY += blockHeight + 4;
+            }
+
+            const fechaStr = ahora.toISOString().slice(0, 10);
+            pdf.save(`Reporte_Dashboard_${fechaStr}.pdf`);
+
+        } catch (err) {
+            console.error('Error al generar el PDF:', err);
+            alert('Ocurrió un problema al procesar la descarga del PDF.');
+        } finally {
+            document.body.removeChild(clon);
+            btn.innerHTML = textoOriginal;
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
     (function () {
-        // Chart.js lo carga Unfold; si deja de hacerlo, el panel queda sin graficos pero no se rompe.
+        document.querySelectorAll('[data-pct]').forEach(function(el) {
+            el.style.setProperty('--pct', el.getAttribute('data-pct'));
+            el.style.setProperty('--h', el.getAttribute('data-pct'));
+        });
+        document.querySelectorAll('[data-cols]').forEach(function(el) {
+            el.style.gridTemplateColumns = 'repeat(' + el.getAttribute('data-cols') + ', minmax(0, 1fr))';
+        });
+
         if (typeof Chart === "undefined") { return; }
 
         var raiz = getComputedStyle(document.documentElement);
@@ -417,22 +606,26 @@
             return el ? JSON.parse(el.textContent) : [];
         };
 
-        var acento = tono("--zs-accent");
-        var suave = tono("--zs-accent-wash");
-        var texto = tono("--zs-ink-faint");
-        var linea = tono("--zs-line-soft");
+        var acento = tono("--zs-accent") || "#2563eb";
+        var suave = tono("--zs-accent-wash") || "#eff6ff";
+        var texto = tono("--zs-ink-faint") || "#6b7280";
+        var linea = tono("--zs-line-soft") || "#e5e7eb";
 
         Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
         Chart.defaults.font.size = 11;
         Chart.defaults.color = texto;
 
         var ejes = {
-            x: { grid: { display: false }, border: { color: linea } },
+            x: { 
+                grid: { display: false }, 
+                border: { color: linea },
+                ticks: { padding: 6 }
+            },
             y: {
                 beginAtZero: true,
                 border: { display: false },
                 grid: { color: linea },
-                ticks: { precision: 0, maxTicksLimit: 5 }
+                ticks: { precision: 0, maxTicksLimit: 5, padding: 8 }
             }
         };
 
@@ -456,6 +649,9 @@
                 },
                 options: {
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { top: 10, bottom: 5, left: 5, right: 10 }
+                    },
                     interaction: { intersect: false, mode: "index" },
                     plugins: {
                         legend: { display: false },
@@ -489,6 +685,9 @@
                 },
                 options: {
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { top: 10, bottom: 5, left: 5, right: 10 }
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -511,43 +710,34 @@
                     datasets: [{
                         data: datos("zs-source-values"),
                         backgroundColor: [
-                            acento, tono("--zs-info"), tono("--zs-ok"),
-                            tono("--zs-warn"), tono("--zs-muted")
+                            acento, "#0284c7", "#16a34a", "#d97706", "#6b7280"
                         ],
-                        borderColor: tono("--zs-surface"),
+                        borderColor: "#ffffff",
                         borderWidth: 3
                     }]
                 },
                 options: {
                     cutout: "62%",
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { right: 30, left: 10, top: 10, bottom: 10 }
+                    },
                     plugins: {
                         legend: {
                             position: "right",
-                            labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true,
-                                      pointStyle: "circle", padding: 12 }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function (c) { return c.label + ": " + c.parsed; }
+                            labels: { 
+                                boxWidth: 10, 
+                                boxHeight: 10, 
+                                usePointStyle: true,
+                                pointStyle: "circle", 
+                                padding: 14,
+                                font: { size: 11 } 
                             }
                         }
                     }
                 }
             });
         }
-    })();
-
-    // Queda abierto en la tablet del anfitrion: recarga sin interrumpir a quien lo esta usando.
-    (function () {
-        var CADA = 120000;
-        setInterval(function () {
-            if (document.hidden) { return; }
-            var activo = document.activeElement;
-            if (activo && /INPUT|TEXTAREA|SELECT/.test(activo.tagName)) { return; }
-            if (document.querySelector(".zs-user-menu:not([style*='none'])")) { return; }
-            globalThis.location.reload();
-        }, CADA);
     })();
     </script>
 
